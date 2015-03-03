@@ -5,11 +5,11 @@ static mrb_value
 mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 {
   char *bin;
-  size_t bin_len;
+  mrb_int bin_len;
 
   mrb_get_args(mrb, "s", &bin, &bin_len);
   char hex[bin_len * 2 + 1];
-  sodium_bin2hex(hex, sizeof(hex), (const unsigned char *) bin, bin_len);
+  sodium_bin2hex(hex, sizeof(hex), (const unsigned char *) bin, (size_t) bin_len);
   return mrb_str_new_cstr(mrb, hex);
 }
 
@@ -243,9 +243,8 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_TYPE_ERROR, "key must be a String or Data Type");
   }
 
-  mrb_value decrypted = mrb_str_buf_new(mrb, ciphertext_len - crypto_secretbox_MACBYTES);
-  mrb_str_modify(mrb, RSTRING(decrypted));
-  int rc = crypto_secretbox_open_easy((unsigned char *) RSTRING_PTR(decrypted),
+  unsigned char decrypted[ciphertext_len - crypto_secretbox_MACBYTES];
+  int rc = crypto_secretbox_open_easy(decrypted,
     (const unsigned char *) ciphertext, (size_t) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
     (const unsigned char *) key);
@@ -253,9 +252,7 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
   if(rc == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
 
-  mrb_str_resize(mrb, decrypted, ciphertext_len - crypto_secretbox_MACBYTES);
-
-  return decrypted;
+  return mrb_str_new(mrb, (char *) decrypted, sizeof(decrypted));
 }
 
 void
