@@ -5,11 +5,11 @@ static mrb_value
 mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 {
   char *bin;
-  size_t bin_len;
+  mrb_int bin_len;
 
   mrb_get_args(mrb, "s", &bin, &bin_len);
   char hex[bin_len * 2 + 1];
-  sodium_bin2hex(hex, sizeof(hex), (const unsigned char *) bin, bin_len);
+  sodium_bin2hex(hex, sizeof(hex), (const unsigned char *) bin, (size_t) bin_len);
   return mrb_str_new_cstr(mrb, hex);
 }
 
