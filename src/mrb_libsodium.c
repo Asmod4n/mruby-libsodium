@@ -211,7 +211,7 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_value ciphertext = mrb_str_buf_new(mrb, crypto_secretbox_MACBYTES + message_len);
   mrb_str_modify(mrb, RSTRING(ciphertext));
   crypto_secretbox_easy((unsigned char *) RSTRING_PTR(ciphertext),
-    (const unsigned char *) message, (size_t) message_len,
+    (const unsigned char *) message, (unsigned long long) message_len,
     (const unsigned char *) RSTRING_PTR(nonce),
     (const unsigned char *) key);
   mrb_str_resize(mrb, ciphertext, crypto_secretbox_MACBYTES + message_len);
@@ -243,19 +243,90 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_TYPE_ERROR, "key must be a String or Data Type");
   }
 
-  mrb_value decrypted = mrb_str_buf_new(mrb, ciphertext_len - crypto_secretbox_MACBYTES);
-  mrb_str_modify(mrb, RSTRING(decrypted));
-  int rc = crypto_secretbox_open_easy((unsigned char *) RSTRING_PTR(decrypted),
-    (const unsigned char *) ciphertext, (size_t) ciphertext_len,
+  unsigned char decrypted[ciphertext_len - crypto_secretbox_MACBYTES];
+  int rc = crypto_secretbox_open_easy(decrypted,
+    (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
     (const unsigned char *) key);
 
   if(rc == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
 
-  mrb_str_resize(mrb, decrypted, ciphertext_len - crypto_secretbox_MACBYTES);
+  return mrb_str_new(mrb, (char *) decrypted, sizeof(decrypted));
+}
 
-  return decrypted;
+static mrb_value
+mrb_crypto_auth(mrb_state *mrb, mrb_value self)
+{
+  char *message;
+  mrb_int message_len;
+  mrb_value key_obj;
+
+  mrb_get_args(mrb, "so", &message, &message_len, &key_obj);
+
+  mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
+
+  char *key;
+
+  switch(mrb_type(key_obj)) {
+    case MRB_TT_STRING:
+      key = RSTRING_PTR(key_obj);
+      break;
+    case MRB_TT_DATA:
+      key = DATA_PTR(key_obj);
+      break;
+    default:
+      mrb_raise(mrb, E_TYPE_ERROR, "key must be a String or Data Type");
+  }
+
+  mrb_value mac = mrb_str_buf_new(mrb, crypto_auth_BYTES);
+  mrb_str_modify(mrb, RSTRING(mac));
+  crypto_auth((unsigned char *) RSTRING_PTR(mac),
+    (const unsigned char *) message, (unsigned long long) message_len,
+    (const unsigned char *) key);
+  mrb_str_resize(mrb, mac, crypto_auth_BYTES);
+
+  return mac;
+}
+
+static mrb_value
+mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
+{
+  mrb_value mac;
+  char *message;
+  mrb_int message_len;
+  mrb_value key_obj;
+
+  mrb_get_args(mrb, "Sso", &mac, &message, &message_len, &key_obj);
+
+  mrb_sodium_check_length(mrb, mac, crypto_auth_BYTES, "mac");
+  mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
+
+  char *key;
+
+  switch(mrb_type(key_obj)) {
+    case MRB_TT_STRING:
+      key = RSTRING_PTR(key_obj);
+      break;
+    case MRB_TT_DATA:
+      key = DATA_PTR(key_obj);
+      break;
+    default:
+      mrb_raise(mrb, E_TYPE_ERROR, "key must be a String or Data Type");
+  }
+
+  int rc = crypto_auth_verify((const unsigned char *) RSTRING_PTR(mac),
+    (const unsigned char *) message, (unsigned long long) message_len,
+    (const unsigned char *) key);
+
+  switch(rc) {
+    case -1:
+      return mrb_false_value();
+    case 0:
+      return mrb_true_value();
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_auth_verify returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 void
@@ -283,6 +354,8 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   crypto_mod = mrb_define_module(mrb, "Crypto");
   mrb_define_module_function(mrb, crypto_mod, "secretbox",      mrb_crypto_secretbox_easy,      MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_mod, "secretbox_open", mrb_crypto_secretbox_open_easy, MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_mod, "auth",           mrb_crypto_auth,                MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_mod, "auth_verify",    mrb_crypto_auth_verify,         MRB_ARGS_REQ(3));
 
   if (sodium_init() == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "Cannot initialize libsodium");
