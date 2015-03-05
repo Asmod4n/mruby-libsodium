@@ -382,7 +382,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
       break;
     case 0:
-      return mrb_str_new((const char *) message, (size_t) message_len);
+      return mrb_str_new(mrb, (const char *) message, (size_t) message_len);
       break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_aead_chacha20poly1305_decrypt returned erroneous value %S", mrb_fixnum_value(rc));
