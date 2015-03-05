@@ -18,15 +18,14 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
 {
   char *hex, *ignore = NULL;
   mrb_int hex_len, bin_maxlen;
-  size_t bin_len;
-  int rc;
 
   mrb_get_args(mrb, "si|z", &hex, &hex_len, &bin_maxlen, &ignore);
   if(bin_maxlen < 0)
     mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
 
   unsigned char bin[bin_maxlen];
-  rc = sodium_hex2bin(bin, bin_maxlen, hex, hex_len, ignore, &bin_len, NULL);
+  size_t bin_len;
+  int rc = sodium_hex2bin(bin, bin_maxlen, hex, hex_len, ignore, &bin_len, NULL);
   if(rc == -1)
     mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
 
@@ -112,9 +111,7 @@ mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_randombytes_random(mrb_state *mrb, mrb_value self)
 {
-  uint32_t ran;
-
-  ran = randombytes_random();
+  uint32_t ran = randombytes_random();
   if (ran > MRB_INT_MAX)
     return mrb_float_value(mrb, ran);
   else
@@ -125,11 +122,10 @@ static mrb_value
 mrb_randombytes_uniform(mrb_state *mrb, mrb_value self)
 {
   mrb_float upper_bound;
-  uint32_t ran;
 
   mrb_get_args(mrb, "f", &upper_bound);
   if (upper_bound >= 0 && upper_bound <= UINT32_MAX) {
-    ran = randombytes_uniform((uint32_t)upper_bound);
+    uint32_t ran = randombytes_uniform((uint32_t) upper_bound);
     if (ran > MRB_INT_MAX)
       return mrb_float_value(mrb, ran);
     else
@@ -184,6 +180,21 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
   }
 }
 
+static inline void *
+mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *reason)
+{
+  switch(mrb_type(obj)) {
+    case MRB_TT_DATA:
+      return DATA_PTR(obj);
+      break;
+    case MRB_TT_STRING:
+      return RSTRING_PTR(obj);
+      break;
+    default:
+      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data or String Type", mrb_str_new_cstr(mrb, reason));
+  }
+}
+
 static mrb_value
 mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
 {
@@ -195,25 +206,15 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
-  const char *key;
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
-  switch(mrb_type(key_obj)) {
-    case MRB_TT_DATA:
-      key = DATA_PTR(key_obj);
-      break;
-    default:
-      key = mrb_string_value_ptr(mrb, key_obj);
-  }
-
-  mrb_value ciphertext = mrb_str_buf_new(mrb, crypto_secretbox_MACBYTES + message_len);
-  mrb_str_modify(mrb, RSTRING(ciphertext));
-  crypto_secretbox_easy((unsigned char *) RSTRING_PTR(ciphertext),
+  unsigned char ciphertext[crypto_secretbox_MACBYTES + message_len];
+  crypto_secretbox_easy(ciphertext,
     (const unsigned char *) message, (unsigned long long) message_len,
     (const unsigned char *) RSTRING_PTR(nonce),
-    (const unsigned char *) key);
-  mrb_str_resize(mrb, ciphertext, crypto_secretbox_MACBYTES + message_len);
+    key);
 
-  return ciphertext;
+  return mrb_str_new(mrb, (const char *) ciphertext, sizeof(ciphertext));
 }
 
 static mrb_value
@@ -227,21 +228,13 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
-  const char *key;
-
-  switch(mrb_type(key_obj)) {
-    case MRB_TT_DATA:
-      key = DATA_PTR(key_obj);
-      break;
-    default:
-      key = mrb_string_value_ptr(mrb, key_obj);
-  }
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
   unsigned char decrypted[ciphertext_len - crypto_secretbox_MACBYTES];
   int rc = crypto_secretbox_open_easy(decrypted,
     (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
-    (const unsigned char *) key);
+    key);
 
   if(rc == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
@@ -260,24 +253,14 @@ mrb_crypto_auth(mrb_state *mrb, mrb_value self)
 
   mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
 
-  const char *key;
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
-  switch(mrb_type(key_obj)) {
-    case MRB_TT_DATA:
-      key = DATA_PTR(key_obj);
-      break;
-    default:
-      key = mrb_string_value_ptr(mrb, key_obj);
-  }
-
-  mrb_value mac = mrb_str_buf_new(mrb, crypto_auth_BYTES);
-  mrb_str_modify(mrb, RSTRING(mac));
-  crypto_auth((unsigned char *) RSTRING_PTR(mac),
+  unsigned char mac[crypto_auth_BYTES];
+  crypto_auth(mac,
     (const unsigned char *) message, (unsigned long long) message_len,
-    (const unsigned char *) key);
-  mrb_str_resize(mrb, mac, crypto_auth_BYTES);
+    key);
 
-  return mac;
+  return mrb_str_new(mrb, (const char *) mac, sizeof(mac));
 }
 
 static mrb_value
@@ -293,25 +276,17 @@ mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, mac, crypto_auth_BYTES, "mac");
   mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
 
-  const char *key;
-
-  switch(mrb_type(key_obj)) {
-    case MRB_TT_DATA:
-      key = DATA_PTR(key_obj);
-      break;
-    default:
-      key = mrb_string_value_ptr(mrb, key_obj);
-  }
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
   int rc = crypto_auth_verify((const unsigned char *) RSTRING_PTR(mac),
     (const unsigned char *) message, (unsigned long long) message_len,
-    (const unsigned char *) key);
+    key);
 
   switch(rc) {
     case -1:
-      return mrb_false_value();
+      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
     case 0:
-      return mrb_true_value();
+      return self;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_auth_verify returned erroneous value %S", mrb_fixnum_value(rc));
   }
@@ -329,15 +304,7 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
-  const char *key;
-
-  switch(mrb_type(key_obj)) {
-    case MRB_TT_DATA:
-      key = DATA_PTR(key_obj);
-      break;
-    default:
-      key = mrb_string_value_ptr(mrb, key_obj);
-  }
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
   unsigned char ciphertext[message_len + crypto_aead_chacha20poly1305_ABYTES];
   unsigned long long ciphertext_len;
@@ -346,7 +313,7 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
     (const unsigned char *) message, (unsigned long long) message_len,
     (const unsigned char *) additional_data, (unsigned long long) additional_data_len,
     NULL, (const unsigned char *) RSTRING_PTR(nonce),
-    (const unsigned char *) key);
+    key);
 
   return mrb_str_new(mrb, (const char *) ciphertext, (size_t) ciphertext_len);
 }
