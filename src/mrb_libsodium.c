@@ -26,11 +26,17 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   unsigned char bin[bin_maxlen];
   size_t bin_len;
   int rc = sodium_hex2bin(bin, bin_maxlen, hex, hex_len, ignore, &bin_len, NULL);
-  if(rc == -1)
-    mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
 
-  else
-    return mrb_str_new(mrb, (const char *) bin, bin_len);
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
+      break;
+    case 0:
+      return mrb_str_new(mrb, (const char *) bin, bin_len);
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_hex2bin returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 static void
@@ -84,28 +90,52 @@ mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_secure_buffer_noaccess(mrb_state *mrb, mrb_value self)
 {
-  if (sodium_mprotect_noaccess(DATA_PTR(self)) == -1)
-    return mrb_false_value();
-  else
-    return self;
+  int rc = sodium_mprotect_noaccess(DATA_PTR(self));
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
+      break;
+    case 0:
+      return self;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_noaccess returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 static mrb_value
 mrb_secure_buffer_readonly(mrb_state *mrb, mrb_value self)
 {
-  if (sodium_mprotect_readonly(DATA_PTR(self)) == -1)
-    return mrb_false_value();
-  else
-    return self;
+  int rc =sodium_mprotect_readonly(DATA_PTR(self));
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
+      break;
+    case 0:
+      return self;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_readonly returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 static mrb_value
 mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 {
-  if (sodium_mprotect_readwrite(DATA_PTR(self)) == -1)
-    return mrb_false_value();
-  else
-    return self;
+  int rc =sodium_mprotect_readwrite(DATA_PTR(self));
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
+      break;
+    case 0:
+      return self;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_readwrite returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 static mrb_value
@@ -230,16 +260,22 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
 
-  unsigned char decrypted[ciphertext_len - crypto_secretbox_MACBYTES];
-  int rc = crypto_secretbox_open_easy(decrypted,
+  unsigned char message[ciphertext_len - crypto_secretbox_MACBYTES];
+  int rc = crypto_secretbox_open_easy(message,
     (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
     key);
 
-  if(rc == -1)
-    mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
-
-  return mrb_str_new(mrb, (char *) decrypted, sizeof(decrypted));
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      break;
+    case 0:
+      return mrb_str_new(mrb, (char *) message, sizeof(message));
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_secretbox_open_easy returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 static mrb_value
@@ -285,8 +321,10 @@ mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
   switch(rc) {
     case -1:
       mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      break;
     case 0:
       return self;
+      break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_auth_verify returned erroneous value %S", mrb_fixnum_value(rc));
   }
@@ -312,10 +350,43 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   crypto_aead_chacha20poly1305_encrypt(ciphertext, &ciphertext_len,
     (const unsigned char *) message, (unsigned long long) message_len,
     (const unsigned char *) additional_data, (unsigned long long) additional_data_len,
-    NULL, (const unsigned char *) RSTRING_PTR(nonce),
-    key);
+    NULL, (const unsigned char *) RSTRING_PTR(nonce), key);
 
   return mrb_str_new(mrb, (const char *) ciphertext, (size_t) ciphertext_len);
+}
+
+static mrb_value
+mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
+{
+  char *ciphertext, *additional_data = NULL;
+  mrb_int ciphertext_len, additional_data_len = 0;
+  mrb_value nonce, key_obj;
+
+  mrb_get_args(mrb, "sSo|s", &ciphertext, &ciphertext_len, &nonce, &key_obj, &additional_data, &additional_data_len);
+
+  mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
+  mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
+
+  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+
+  unsigned char message[ciphertext_len - crypto_aead_chacha20poly1305_ABYTES];
+  unsigned long long message_len;
+
+  int rc = crypto_aead_chacha20poly1305_decrypt(message, &message_len, NULL,
+    (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
+    (const unsigned char *) additional_data, (unsigned long long) additional_data_len,
+    (const unsigned char *) RSTRING_PTR(nonce), key);
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      break;
+    case 0:
+      return mrb_str_new((const char *) message, (size_t) message_len);
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_aead_chacha20poly1305_decrypt returned erroneous value %S", mrb_fixnum_value(rc));
+  }
 }
 
 void
@@ -349,7 +420,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   crypto_aead_mod = mrb_define_module_under(mrb, crypto_mod, "AEAD");
   crypto_aead_chacha20poly1305_mod = mrb_define_module_under(mrb, crypto_aead_mod, "Chacha20Poly1305");
   mrb_define_module_function(mrb, crypto_aead_chacha20poly1305_mod, "encrypt", mrb_crypto_aead_chacha20poly1305_encrypt, MRB_ARGS_ARG(3, 1));
-  //mrb_define_module_function(mrb, crypto_aead_chacha20poly1305_mod, "decrypt", mrb_crypto_aead_chacha20poly1305_decrypt, MRB_ARGS_ARG(3, 1));
+  mrb_define_module_function(mrb, crypto_aead_chacha20poly1305_mod, "decrypt", mrb_crypto_aead_chacha20poly1305_decrypt, MRB_ARGS_ARG(3, 1));
 
   if (sodium_init() == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "Cannot initialize libsodium");
