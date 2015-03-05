@@ -345,6 +345,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_mod, "secretbox_open", mrb_crypto_secretbox_open_easy, MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_mod, "auth",           mrb_crypto_auth,                MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_mod, "auth_verify",    mrb_crypto_auth_verify,         MRB_ARGS_REQ(3));
+
   crypto_aead_mod = mrb_define_module_under(mrb, crypto_mod, "AEAD");
   crypto_aead_chacha20poly1305_mod = mrb_define_module_under(mrb, crypto_aead_mod, "Chacha20Poly1305");
   mrb_define_module_function(mrb, crypto_aead_chacha20poly1305_mod, "encrypt", mrb_crypto_aead_chacha20poly1305_encrypt, MRB_ARGS_ARG(3, 1));
