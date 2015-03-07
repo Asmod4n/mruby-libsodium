@@ -2,6 +2,7 @@
 #define MRB_LIBSODIUM_H
 
 #include <sodium.h>
+#include <string.h>
 #include <mruby/data.h>
 #include <mruby/string.h>
 #include <mruby/class.h>
