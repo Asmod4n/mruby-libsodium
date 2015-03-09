@@ -39,6 +39,31 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   }
 }
 
+static mrb_value
+mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
+{
+  mrb_value hex;
+  char *ignore = NULL;
+
+  mrb_get_args(mrb, "S|z", &hex, &ignore);
+
+  mrb_str_modify(mrb, RSTRING(hex));
+  size_t bin_len;
+  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(hex), RSTRING_CAPA(hex),
+    RSTRING_PTR(hex), RSTRING_LEN(hex), ignore, &bin_len, NULL);
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
+      break;
+    case 0:
+      return mrb_str_resize(mrb, hex, (mrb_int) bin_len);
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_hex2bin returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
 static void
 mrb_secure_buffer_free(mrb_state *mrb, void *p)
 {
@@ -205,7 +230,7 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
   if(obj_size != sodium_const) {
     mrb_raisef(mrb, E_SODIUM_ERROR, "Expected a length == %S bytes %S, got %S bytes",
       mrb_fixnum_value(sodium_const),
-      mrb_str_new_cstr(mrb, reason),
+      mrb_str_new_static(mrb, reason, strlen(reason)),
       mrb_fixnum_value(obj_size));
   }
 }
@@ -221,7 +246,7 @@ mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *reason)
       return RSTRING_PTR(obj);
       break;
     default:
-      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data or String Type", mrb_str_new_cstr(mrb, reason));
+      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data or String Type", mrb_str_new_static(mrb, reason, strlen(reason)));
   }
 }
 
@@ -470,8 +495,9 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
 
   sodium_mod = mrb_define_module(mrb, "Sodium");
   mrb_define_class_under(mrb, sodium_mod, "Error", E_RUNTIME_ERROR);
-  mrb_define_module_function(mrb, sodium_mod, "bin2hex", mrb_sodium_bin2hex, MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, sodium_mod, "hex2bin", mrb_sodium_hex2bin, MRB_ARGS_ARG(2, 1));
+  mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,         MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,         MRB_ARGS_ARG(2, 1));
+  mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,    MRB_ARGS_ARG(1, 1));
 
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
