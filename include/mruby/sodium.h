@@ -1,7 +1,7 @@
 ﻿#ifndef MRUBY_SODIUM_H
 #define MRUBY_SODIUM_H
 
-#include "mruby.h"
+#include <mruby.h>
 
 #ifdef __cplusplus
 extern "C" {
