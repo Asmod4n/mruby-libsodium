@@ -9,8 +9,11 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "s", &bin, &bin_len);
 
-  mrb_value hex = mrb_str_new(mrb, NULL, bin_len * 2);
-  sodium_bin2hex(RSTRING_PTR(hex), RSTRING_LEN(hex) + 1, (const unsigned char *) bin, (size_t) bin_len);
+  mrb_value hex = mrb_str_new(mrb, NULL, (size_t) bin_len * 2);
+
+  sodium_bin2hex(RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex) + 1,
+    (const unsigned char *) bin, (size_t) bin_len);
+
   return hex;
 }
 
@@ -21,13 +24,18 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   mrb_int hex_len, bin_maxlen;
 
   mrb_get_args(mrb, "si|z", &hex, &hex_len, &bin_maxlen, &ignore);
-  if(bin_maxlen < 0)
-    mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
 
-  mrb_value bin = mrb_str_new(mrb, NULL, bin_maxlen);
+  if (bin_maxlen < 0||bin_maxlen > SIZE_MAX)
+    mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is out of range");
+
+  mrb_value bin = mrb_str_buf_new(mrb, (size_t) bin_maxlen);
   size_t bin_len;
-  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(bin),
-    bin_maxlen, hex, hex_len, ignore, &bin_len, NULL);
+
+  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(bin), (size_t) bin_maxlen,
+    (const char *) hex, (size_t) hex_len,
+    (const char *) ignore,
+    &bin_len,
+    NULL);
 
   switch(rc) {
     case -1:
@@ -51,8 +59,12 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
 
   mrb_str_modify(mrb, RSTRING(hex));
   size_t bin_len;
-  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(hex), RSTRING_CAPA(hex),
-    RSTRING_PTR(hex), RSTRING_LEN(hex), ignore, &bin_len, NULL);
+
+  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(hex), (size_t) RSTRING_CAPA(hex),
+   (const char *) RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex),
+   (const char *) ignore,
+   &bin_len,
+   NULL);
 
   switch(rc) {
     case -1:
@@ -63,6 +75,31 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
       break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_hex2bin returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
+{
+  char *b1_, *b2_;
+  mrb_int b1_len, b2_len;
+
+  mrb_get_args(mrb, "ss", &b1_, &b1_len, &b2_, &b2_len);
+
+  if (b1_len != b2_len)
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "b1 and b2 size differ");
+
+  int rc = sodium_memcmp(b1_, b2_, b1_len);
+
+  switch(rc) {
+    case -1:
+      return mrb_false_value();
+      break;
+    case 0:
+      return mrb_true_value();
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_memcmp returned erroneous value %S", mrb_fixnum_value(rc));
   }
 }
 
@@ -79,18 +116,13 @@ static const struct mrb_data_type secure_buffer_type = {
 static mrb_value
 mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 {
-  void *buffer;
+  void *buffer = NULL;
   mrb_int size;
 
-  buffer = DATA_PTR(self);
-  if(buffer)
-    mrb_free(mrb, buffer);
-
-  mrb_data_init(self, NULL, &secure_buffer_type);
-
   mrb_get_args(mrb, "i", &size);
-  if (size < 0)
-    mrb_raise(mrb, E_RANGE_ERROR, "size mustn't be negative");
+
+  if (size < 0||size > SIZE_MAX)
+    mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
   else {
     buffer = sodium_malloc((size_t) size);
@@ -110,8 +142,7 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 {
-  return mrb_iv_get(mrb, self,
-    mrb_intern_lit(mrb, "size"));
+  return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"));
 }
 
 static mrb_value
@@ -169,9 +200,11 @@ static mrb_value
 mrb_randombytes_random(mrb_state *mrb, mrb_value self)
 {
   uint32_t ran = randombytes_random();
+#if !defined(MRB_INT64)
   if (ran > MRB_INT_MAX)
     return mrb_float_value(mrb, ran);
   else
+#endif
     return mrb_fixnum_value(ran);
 }
 
@@ -181,11 +214,14 @@ mrb_randombytes_uniform(mrb_state *mrb, mrb_value self)
   mrb_float upper_bound;
 
   mrb_get_args(mrb, "f", &upper_bound);
+
   if (upper_bound >= 0 && upper_bound <= UINT32_MAX) {
     uint32_t ran = randombytes_uniform((uint32_t) upper_bound);
+#if !defined(MRB_INT64)
     if (ran > MRB_INT_MAX)
       return mrb_float_value(mrb, ran);
     else
+#endif
       return mrb_fixnum_value(ran);
   } else {
     mrb_raise(mrb, E_RANGE_ERROR, "upper_bound is out of range");
@@ -202,12 +238,12 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
   switch(mrb_type(buf_obj)) {
     case MRB_TT_STRING:
       mrb_str_modify(mrb, RSTRING(buf_obj));
-      randombytes_buf(RSTRING_PTR(buf_obj), RSTRING_LEN(buf_obj));
+      randombytes_buf(RSTRING_PTR(buf_obj), (size_t) RSTRING_LEN(buf_obj));
       break;
     case MRB_TT_DATA: {
       mrb_int _size = mrb_int(mrb, mrb_funcall(mrb, buf_obj, "size", 0));
-      if(_size < 0)
-        mrb_raise(mrb, E_RANGE_ERROR, "size mustn't be negative");
+      if (_size < 0||_size > SIZE_MAX)
+        mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
       randombytes_buf(DATA_PTR(buf_obj), (size_t) _size);
       break;
@@ -224,13 +260,13 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
 {
   mrb_int obj_size;
 
-  if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize")) == TRUE)
+  if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize")))
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "bytesize", 0));
   else
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "size", 0));
 
-  if(obj_size != sodium_const) {
-    mrb_raisef(mrb, E_SODIUM_ERROR, "Expected a length == %S bytes %S, got %S bytes",
+  if (obj_size != sodium_const) {
+    mrb_raisef(mrb, E_SODIUM_ERROR, "expected a length == %S bytes %S, got %S bytes",
       mrb_fixnum_value(sodium_const),
       mrb_str_new_static(mrb, reason, strlen(reason)),
       mrb_fixnum_value(obj_size));
@@ -260,12 +296,13 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_value nonce, key_obj;
 
   mrb_get_args(mrb, "sSo", &message, &message_len, &nonce, &key_obj);
+
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value ciphertext = mrb_str_new(mrb,
-    NULL, (size_t) message_len + crypto_secretbox_MACBYTES);
+  mrb_value ciphertext = mrb_str_new(mrb, NULL,
+    (size_t) message_len + crypto_secretbox_MACBYTES);
 
   crypto_secretbox_easy((unsigned char *) RSTRING_PTR(ciphertext),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -283,11 +320,14 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
   mrb_value nonce, key_obj;
 
   mrb_get_args(mrb, "sSo", &ciphertext, &ciphertext_len, &nonce, &key_obj);
+
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value message = mrb_str_new(mrb, NULL, ciphertext_len - crypto_secretbox_MACBYTES);
+  mrb_value message = mrb_str_new(mrb, NULL,
+    (size_t) ciphertext_len - crypto_secretbox_MACBYTES);
+
   int rc = crypto_secretbox_open_easy((unsigned char *) RSTRING_PTR(message),
     (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
@@ -295,7 +335,7 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
       break;
     case 0:
       return message;
@@ -340,13 +380,14 @@ mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+
   int rc = crypto_auth_verify((const unsigned char *) RSTRING_PTR(mac),
     (const unsigned char *) message, (unsigned long long) message_len,
     key);
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
       break;
     case 0:
       return self;
@@ -371,7 +412,8 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value ciphertext = mrb_str_new(mrb, NULL, (size_t) message_len + crypto_aead_chacha20poly1305_ABYTES);
+  mrb_value ciphertext = mrb_str_buf_new(mrb,
+    (size_t) message_len + crypto_aead_chacha20poly1305_ABYTES);
   unsigned long long ciphertext_len;
 
   crypto_aead_chacha20poly1305_encrypt((unsigned char *) RSTRING_PTR(ciphertext), &ciphertext_len,
@@ -398,7 +440,8 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value message = mrb_str_new(mrb, NULL, ciphertext_len - crypto_aead_chacha20poly1305_ABYTES);
+  mrb_value message = mrb_str_buf_new(mrb,
+    (size_t) ciphertext_len - crypto_aead_chacha20poly1305_ABYTES);
   unsigned long long message_len;
 
   int rc = crypto_aead_chacha20poly1305_decrypt((unsigned char *) RSTRING_PTR(message), &message_len, NULL,
@@ -409,7 +452,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
       break;
     case 0:
       return mrb_str_resize(mrb, message, (mrb_int) message_len);
@@ -431,7 +474,7 @@ mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
 
   unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_str_modify(mrb, RSTRING(public_key));
-  if(mrb_type(secret_key_obj) == MRB_TT_STRING)
+  if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
 
   crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
@@ -478,7 +521,8 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
   const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  mrb_value message = mrb_str_new(mrb, NULL, ciphertext_len - crypto_box_MACBYTES);
+  mrb_value message = mrb_str_new(mrb, NULL, (size_t) ciphertext_len - crypto_box_MACBYTES);
+
   int rc = crypto_box_open_easy((unsigned char *) RSTRING_PTR(message),
     (const unsigned char *) ciphertext, (unsigned long long) ciphertext_len,
     (const unsigned char *) RSTRING_PTR(nonce),
@@ -487,7 +531,7 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "Message forged!");
+      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
       break;
     case 0:
       return message;
@@ -505,9 +549,10 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
 
   sodium_mod = mrb_define_module(mrb, "Sodium");
   mrb_define_class_under(mrb, sodium_mod, "Error", E_RUNTIME_ERROR);
-  mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,         MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,         MRB_ARGS_ARG(2, 1));
-  mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,    MRB_ARGS_ARG(1, 1));
+  mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,       MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,       MRB_ARGS_ARG(2, 1));
+  mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,  MRB_ARGS_ARG(1, 1));
+  mrb_define_module_function(mrb, sodium_mod, "memcmp",   mrb_sodium_memcmp,        MRB_ARGS_REQ(2));
 
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
@@ -530,6 +575,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_secretbox_mod, "PRIMITIVE",  mrb_str_new_static(mrb, crypto_secretbox_PRIMITIVE, strlen(crypto_secretbox_PRIMITIVE)));
   mrb_define_module_function(mrb, crypto_mod, "secretbox",      mrb_crypto_secretbox_easy,      MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_secretbox_mod, "open", mrb_crypto_secretbox_open_easy, MRB_ARGS_REQ(2));
+
   crypto_auth_mod = mrb_define_module_under(mrb, crypto_mod, "Auth");
   mrb_define_const(mrb, crypto_auth_mod, "BYTES",     mrb_fixnum_value(crypto_auth_BYTES));
   mrb_define_const(mrb, crypto_auth_mod, "KEYBYTES",  mrb_fixnum_value(crypto_auth_KEYBYTES));
@@ -557,7 +603,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_box_mod, "open",     mrb_crypto_box_open_easy, MRB_ARGS_REQ(4));
 
   if (sodium_init() == -1)
-    mrb_raise(mrb, E_SODIUM_ERROR, "Cannot initialize libsodium");
+    mrb_raise(mrb, E_SODIUM_ERROR, "cannot initialize libsodium");
 }
 
 void
