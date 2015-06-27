@@ -11,10 +11,10 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 
   mrb_value hex = mrb_str_new(mrb, NULL, (size_t) bin_len * 2);
 
-  int rc = sodium_bin2hex(RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex) + 1,
+  char *h = sodium_bin2hex(RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex) + 1,
     (const unsigned char *) bin, (size_t) bin_len);
 
-  mrb_assert(rc == 0);
+  mrb_assert(h);
 
   return hex;
 }
