@@ -11,8 +11,10 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 
   mrb_value hex = mrb_str_new(mrb, NULL, (size_t) bin_len * 2);
 
-  sodium_bin2hex(RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex) + 1,
+  int rc = sodium_bin2hex(RSTRING_PTR(hex), (size_t) RSTRING_LEN(hex) + 1,
     (const unsigned char *) bin, (size_t) bin_len);
+
+  mrb_assert(rc == 0);
 
   return hex;
 }
@@ -492,23 +494,23 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
 {
-  mrb_value public_key, secret_key_obj;
+  mrb_value secret_key_obj;
 
-  mrb_get_args(mrb, "So", &public_key, &secret_key_obj);
+  mrb_get_args(mrb, "o", &secret_key_obj);
 
-  mrb_sodium_check_length(mrb, public_key,      crypto_box_PUBLICKEYBYTES, "public_key");
-  mrb_sodium_check_length(mrb, secret_key_obj,  crypto_box_SECRETKEYBYTES, "secret_key");
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
-  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  mrb_str_modify(mrb, RSTRING(public_key));
   if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
+
+  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
 
   mrb_assert(rc == 0);
 
-  return self;
+  return public_key;
 }
 
 static mrb_value
