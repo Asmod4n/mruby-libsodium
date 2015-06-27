@@ -28,7 +28,7 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "si|z", &hex, &hex_len, &bin_maxlen, &ignore);
 
   if (bin_maxlen < 0)
-    mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen musn't be negative");
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_maxlen mustn't be negative");
 
   mrb_value bin = mrb_str_buf_new(mrb, (size_t) bin_maxlen);
   size_t bin_len;
@@ -41,7 +41,7 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_maxlen is too small");
       break;
     case 0:
       return mrb_str_resize(mrb, bin, (mrb_int) bin_len);
@@ -70,7 +70,7 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_RANGE_ERROR, "bin_maxlen is too small");
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_maxlen is too small");
       break;
     case 0:
       return mrb_str_resize(mrb, hex, (mrb_int) bin_len);
@@ -225,9 +225,9 @@ mrb_randombytes_uniform(mrb_state *mrb, mrb_value self)
     else
 #endif
       return mrb_fixnum_value(ran);
-  } else {
-    mrb_raise(mrb, E_RANGE_ERROR, "upper_bound is out of range");
   }
+  else
+    mrb_raise(mrb, E_RANGE_ERROR, "upper_bound is out of range");
 }
 
 static mrb_value
@@ -268,7 +268,7 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "size", 0));
 
   if (obj_size != sodium_const) {
-    mrb_raisef(mrb, E_SODIUM_ERROR, "expected a length == %S bytes %S, got %S bytes",
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length == %S bytes %S, got %S bytes",
       mrb_fixnum_value(sodium_const),
       mrb_str_new_static(mrb, reason, strlen(reason)),
       mrb_fixnum_value(obj_size));
@@ -286,7 +286,7 @@ mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, 
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "size", 0));
 
   if (obj_size < min||obj_size > max) {
-    mrb_raisef(mrb, E_SODIUM_ERROR, "expected a length between %S and %S (inclusive) bytes %S, got %S bytes",
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length between %S and %S (inclusive) bytes %S, got %S bytes",
       mrb_fixnum_value(min),
       mrb_fixnum_value(max),
       mrb_str_new_static(mrb, reason, strlen(reason)),
@@ -507,6 +507,30 @@ mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
+
+  mrb_assert(rc == 0);
+
+  return public_key;
+}
+
+static mrb_value
+mrb_crypto_box_seed_keypair(mrb_state *mrb, mrb_value self)
+{
+  mrb_value secret_key_obj, seed_obj;
+
+  mrb_get_args(mrb, "oo", &secret_key_obj, &seed_obj);
+
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
+  mrb_sodium_check_length(mrb, seed_obj, crypto_box_SEEDBYTES, "seed");
+
+  if (mrb_string_p(secret_key_obj))
+    mrb_str_modify(mrb, RSTRING(secret_key_obj));
+
+  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *seed = mrb_sodium_get_ptr(mrb, seed_obj, "seed");
+  mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
+
+  int rc = crypto_box_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
 
   mrb_assert(rc == 0);
 
@@ -742,9 +766,10 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_box_mod, "SEEDBYTES",      mrb_fixnum_value(crypto_box_SEEDBYTES));
   mrb_define_const(mrb, crypto_box_mod, "BEFORENMBYTES",  mrb_fixnum_value(crypto_box_BEFORENMBYTES));
   mrb_define_const(mrb, crypto_box_mod, "PRIMITIVE",      mrb_str_new_static(mrb, crypto_box_PRIMITIVE, strlen(crypto_box_PRIMITIVE)));
-  mrb_define_module_function(mrb, crypto_box_mod, "keypair",  mrb_crypto_box_keypair,   MRB_ARGS_REQ(2));
-  mrb_define_module_function(mrb, crypto_mod,     "box",      mrb_crypto_box_easy,      MRB_ARGS_REQ(4));
-  mrb_define_module_function(mrb, crypto_box_mod, "open",     mrb_crypto_box_open_easy, MRB_ARGS_REQ(4));
+  mrb_define_module_function(mrb, crypto_box_mod, "keypair",      mrb_crypto_box_keypair,       MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, crypto_box_mod, "seed_keypair", mrb_crypto_box_seed_keypair,  MRB_ARGS_ARG(1, 1));
+  mrb_define_module_function(mrb, crypto_mod,     "box",          mrb_crypto_box_easy,          MRB_ARGS_REQ(4));
+  mrb_define_module_function(mrb, crypto_box_mod, "open",         mrb_crypto_box_open_easy,     MRB_ARGS_REQ(4));
 
   crypto_generichash_cl = mrb_define_class_under(mrb, crypto_mod, "GenericHash", mrb->object_class);
   MRB_SET_INSTANCE_TT(crypto_generichash_cl, MRB_TT_DATA);
@@ -754,6 +779,8 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_generichash_cl,  "KEYBYTES",     mrb_fixnum_value(crypto_generichash_KEYBYTES));
   mrb_define_const(mrb, crypto_generichash_cl,  "KEYBYTES_MIN", mrb_fixnum_value(crypto_generichash_KEYBYTES_MIN));
   mrb_define_const(mrb, crypto_generichash_cl,  "KEYBYTES_MAX", mrb_fixnum_value(crypto_generichash_KEYBYTES_MAX));
+  mrb_define_const(mrb, crypto_generichash_cl,  "PRIMITIVE",    mrb_str_new_static(mrb,
+    crypto_generichash_PRIMITIVE, strlen(crypto_generichash_PRIMITIVE)));
   mrb_define_module_function(mrb, crypto_mod,   "generichash",  mrb_crypto_generichash, MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, crypto_generichash_cl, "initialize",   mrb_crypto_generichash_init, MRB_ARGS_OPT(2));
   mrb_define_method(mrb, crypto_generichash_cl, "update",       mrb_crypto_generichash_update, MRB_ARGS_REQ(1));
