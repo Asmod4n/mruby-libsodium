@@ -1,4 +1,8 @@
-﻿#ifndef MRUBY_SODIUM_H
+﻿#if defined(MRB_INT16)
+# error MRB_INT16 is too small for mruby-libsodium.
+#endif
+
+#ifndef MRUBY_SODIUM_H
 #define MRUBY_SODIUM_H
 
 #include <mruby.h>

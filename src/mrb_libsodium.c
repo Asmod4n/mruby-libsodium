@@ -448,8 +448,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value message = mrb_str_buf_new(mrb,
-    (size_t) ciphertext_len - crypto_aead_chacha20poly1305_ABYTES);
+  mrb_value message = mrb_str_buf_new(mrb, (size_t) ciphertext_len);
   unsigned long long message_len;
 
   int rc = crypto_aead_chacha20poly1305_decrypt((unsigned char *) RSTRING_PTR(message), &message_len, NULL,
@@ -844,11 +843,129 @@ mrb_crypto_generichash_final(mrb_state *mrb, mrb_value self)
   return hash;
 }
 
+static mrb_value
+mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
+{
+  mrb_value outlen;
+  char *passwd;
+  mrb_int passwdlen;
+  mrb_value salt_obj;
+  mrb_int opslimit = crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE;
+  mrb_int memlimit = crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE;
+
+  mrb_get_args(mrb, "oso|ii", &outlen, &passwd, &passwdlen, &salt_obj, &opslimit, &memlimit);
+
+  if (mrb_int(mrb, outlen) < 0)
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "outlen mustn't be negative");
+  mrb_sodium_check_length(mrb, salt_obj, crypto_pwhash_scryptsalsa208sha256_SALTBYTES, "salt");
+  if (opslimit < 0)
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
+  if (memlimit < 0||memlimit > SIZE_MAX)
+    mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
+
+  const unsigned char * const salt = mrb_sodium_get_ptr(mrb, salt_obj, "salt");
+  mrb_value secret_key_obj = mrb_obj_new(mrb,
+    mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen);
+  unsigned char * const secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+
+  errno = 0;
+  int rc = crypto_pwhash_scryptsalsa208sha256(secret_key, (unsigned long long) mrb_int(mrb, outlen),
+    (const char * const) passwd, (unsigned long long) passwdlen,
+    salt,
+    (unsigned long long) opslimit,
+    (size_t) memlimit);
+
+  switch(rc) {
+    case -1: {
+      if (errno == ENOMEM) {
+        mrb->out_of_memory = TRUE;
+        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+      }
+      else
+        mrb_raise(mrb, E_SODIUM_ERROR, strerror(errno));
+    }
+      break;
+    case 0:
+      return secret_key_obj;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256 returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
+{
+  char *passwd;
+  mrb_int passwdlen;
+  mrb_int opslimit = crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE;
+  mrb_int memlimit = crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE;
+
+  mrb_get_args(mrb, "s|ii", &passwd, &passwdlen, &opslimit, &memlimit);
+
+  if (opslimit < 0)
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
+  if (memlimit < 0||memlimit > SIZE_MAX)
+    mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
+
+  mrb_value out = mrb_str_new(mrb, NULL, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1);
+
+  errno = 0;
+  int rc = crypto_pwhash_scryptsalsa208sha256_str(RSTRING_PTR(out),
+    (const char * const) passwd, (unsigned long long) passwdlen,
+    (unsigned long long) opslimit,
+    (size_t) memlimit);
+
+  switch(rc) {
+    case -1: {
+      if (errno == ENOMEM) {
+        mrb->out_of_memory = TRUE;
+        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+      }
+      else
+        mrb_raise(mrb, E_SODIUM_ERROR, strerror(errno));
+    }
+      break;
+    case 0:
+      return out;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256 returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self)
+{
+  mrb_value str_obj;
+  char *passwd;
+  mrb_int passwdlen;
+
+  mrb_get_args(mrb, "Ss", &str_obj, &passwd, &passwdlen);
+
+  mrb_sodium_check_length(mrb, str_obj, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1, "str");
+
+  int rc = crypto_pwhash_scryptsalsa208sha256_str_verify(RSTRING_PTR(str_obj),
+    (const char * const) passwd, (unsigned long long) passwdlen);
+
+  switch(rc) {
+    case -1:
+      return mrb_false_value();
+      break;
+    case 0:
+      return mrb_true_value();
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str_verify returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
 void
 mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   struct RClass *sodium_mod, *secure_buffer_cl, *randombytes_mod, *crypto_mod,
     *crypto_secretbox_mod, *crypto_auth_mod, *crypto_aead_mod,
-    *crypto_aead_chacha20poly1305_mod, *crypto_box_mod, *crypto_sign_mod, *crypto_generichash_cl;
+    *crypto_aead_chacha20poly1305_mod, *crypto_box_mod, *crypto_sign_mod, *crypto_generichash_cl,
+    *crypto_pwhash_mod, *crypto_pwhash_scryptsalsa208sha256_mod;
 
   sodium_mod = mrb_define_module(mrb, "Sodium");
   mrb_define_class_under(mrb, sodium_mod, "Error", E_RUNTIME_ERROR);
@@ -933,7 +1050,27 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_mod,   "generichash",  mrb_crypto_generichash, MRB_ARGS_ARG(1, 2));
   mrb_define_method(mrb, crypto_generichash_cl, "initialize",   mrb_crypto_generichash_init, MRB_ARGS_OPT(2));
   mrb_define_method(mrb, crypto_generichash_cl, "update",       mrb_crypto_generichash_update, MRB_ARGS_REQ(1));
+  mrb_define_alias (mrb, crypto_generichash_cl, "<<", "update");
   mrb_define_method(mrb, crypto_generichash_cl, "final",        mrb_crypto_generichash_final, MRB_ARGS_NONE());
+
+  crypto_pwhash_mod = mrb_define_module_under(mrb, crypto_mod, "PwHash");
+  mrb_define_module_function(mrb, crypto_pwhash_mod,  "scryptsalsa208sha256", mrb_crypto_pwhash_scryptsalsa208sha256, MRB_ARGS_ARG(3, 2));
+  crypto_pwhash_scryptsalsa208sha256_mod = mrb_define_module_under(mrb, crypto_pwhash_mod, "ScryptSalsa208SHA256");
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "SALTBYTES", mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_SALTBYTES));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "STRBYTES", mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_STRBYTES));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "STRPREFIX",
+    mrb_str_new_static(mrb, crypto_pwhash_scryptsalsa208sha256_STRPREFIX, strlen(crypto_pwhash_scryptsalsa208sha256_STRPREFIX)));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "OPSLIMIT_INTERACTIVE",
+    mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "MEMLIMIT_INTERACTIVE",
+    mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "OPSLIMIT_SENSITIVE",
+    mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE));
+  mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "MEMLIMIT_SENSITIVE",
+    mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_SENSITIVE));
+  mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str", mrb_crypto_pwhash_scryptsalsa208sha256_str, MRB_ARGS_ARG(1, 2));
+  mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str_verify", mrb_crypto_pwhash_scryptsalsa208sha256_str_verify,
+    MRB_ARGS_REQ(2));
 
   if (sodium_init() == -1)
     mrb_raise(mrb, E_SODIUM_ERROR, "cannot initialize libsodium");
