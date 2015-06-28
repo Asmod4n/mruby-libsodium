@@ -152,16 +152,9 @@ mrb_secure_buffer_noaccess(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_noaccess(DATA_PTR(self));
 
-  switch(rc) {
-    case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
-      break;
-    case 0:
-      return self;
-      break;
-    default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_noaccess returned erroneous value %S", mrb_fixnum_value(rc));
-  }
+  mrb_assert(rc == 0);
+
+  return self;
 }
 
 static mrb_value
@@ -169,16 +162,9 @@ mrb_secure_buffer_readonly(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readonly(DATA_PTR(self));
 
-  switch(rc) {
-    case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
-      break;
-    case 0:
-      return self;
-      break;
-    default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_readonly returned erroneous value %S", mrb_fixnum_value(rc));
-  }
+  mrb_assert(rc == 0);
+
+  return self;
 }
 
 static mrb_value
@@ -186,16 +172,9 @@ mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readwrite(DATA_PTR(self));
 
-  switch(rc) {
-    case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "cannot protect memory");
-      break;
-    case 0:
-      return self;
-      break;
-    default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_mprotect_readwrite returned erroneous value %S", mrb_fixnum_value(rc));
-  }
+  mrb_assert(rc == 0);
+
+  return self;
 }
 
 static mrb_value
@@ -360,7 +339,7 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
+      mrb_raise(mrb, E_CRYPTO_ERROR, "message forged!");
       break;
     case 0:
       return message;
@@ -414,7 +393,7 @@ mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
+      mrb_raise(mrb, E_CRYPTO_ERROR, "message forged!");
       break;
     case 0:
       return self;
@@ -481,7 +460,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
+      mrb_raise(mrb, E_CRYPTO_ERROR, "message forged!");
       break;
     case 0:
       return mrb_str_resize(mrb, message, (mrb_int) message_len);
@@ -588,13 +567,169 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1:
-      mrb_raise(mrb, E_SODIUM_ERROR, "message forged!");
+      mrb_raise(mrb, E_CRYPTO_ERROR, "message forged!");
       break;
     case 0:
       return message;
       break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_box_open_easy returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_crypto_sign_keypair(mrb_state *mrb, mrb_value self)
+{
+  mrb_value secret_key_obj;
+
+  mrb_get_args(mrb, "o", &secret_key_obj);
+
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
+
+  if (mrb_string_p(secret_key_obj))
+    mrb_str_modify(mrb, RSTRING(secret_key_obj));
+
+  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
+
+  int rc = crypto_sign_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
+
+  mrb_assert(rc == 0);
+
+  return public_key;
+}
+
+static mrb_value
+mrb_crypto_sign_seed_keypair(mrb_state *mrb, mrb_value self)
+{
+  mrb_value secret_key_obj, seed_obj;
+
+  mrb_get_args(mrb, "oo", &secret_key_obj, &seed_obj);
+
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
+  mrb_sodium_check_length(mrb, seed_obj, crypto_sign_SEEDBYTES, "seed");
+
+  if (mrb_string_p(secret_key_obj))
+    mrb_str_modify(mrb, RSTRING(secret_key_obj));
+
+  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *seed = mrb_sodium_get_ptr(mrb, seed_obj, "seed");
+  mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
+
+  int rc = crypto_sign_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
+
+  mrb_assert(rc == 0);
+
+  return public_key;
+}
+
+static mrb_value
+mrb_crypto_sign(mrb_state *mrb, mrb_value self)
+{
+  char *message;
+  mrb_int message_len;
+  mrb_value secret_key_obj;
+
+  mrb_get_args(mrb, "so", &message, &message_len, &secret_key_obj);
+
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
+
+  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  mrb_value signed_message = mrb_str_buf_new(mrb, crypto_sign_BYTES + message_len);
+  unsigned long long signed_message_len;
+
+  int rc = crypto_sign((unsigned char *) RSTRING_PTR(signed_message), &signed_message_len,
+    (const unsigned char *) message, (unsigned long long) message_len,
+    secret_key);
+
+  mrb_assert(rc == 0);
+
+  return mrb_str_resize(mrb, signed_message, (mrb_int) signed_message_len);
+}
+
+static mrb_value
+mrb_crypto_sign_open(mrb_state *mrb, mrb_value self)
+{
+  char *signed_message;
+  mrb_int signed_message_len;
+  mrb_value public_key_obj;
+
+  mrb_get_args(mrb, "so", &signed_message, &signed_message_len, &public_key_obj);
+
+  mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
+
+  const unsigned char *public_key = mrb_sodium_get_ptr(mrb, public_key_obj, "public_key");
+  mrb_value message = mrb_str_buf_new(mrb, signed_message_len);
+  unsigned long long message_len;
+
+  int rc = crypto_sign_open((unsigned char *) RSTRING_PTR(message), &message_len,
+    (const unsigned char *) signed_message, (unsigned long long) signed_message_len,
+    public_key);
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_CRYPTO_ERROR, "signed message forged!");
+      break;
+    case 0:
+      return mrb_str_resize(mrb, message, (mrb_int) message_len);
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_sign_open returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_crypto_sign_detached(mrb_state *mrb, mrb_value self)
+{
+  char *message;
+  mrb_int message_len;
+  mrb_value secret_key_obj;
+
+  mrb_get_args(mrb, "so", &message, &message_len, &secret_key_obj);
+
+  mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
+
+  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  mrb_value signature = mrb_str_buf_new(mrb, crypto_sign_BYTES);
+  unsigned long long signature_len;
+
+  int rc = crypto_sign_detached((unsigned char *) RSTRING_PTR(signature), &signature_len,
+    (const unsigned char *) message, (unsigned long long) message_len,
+    secret_key);
+
+  mrb_assert(rc == 0);
+
+  return mrb_str_resize(mrb, signature, (mrb_int) signature_len);
+}
+
+static mrb_value
+mrb_crypto_sign_verify_detached(mrb_state *mrb, mrb_value self)
+{
+  mrb_value signature;
+  char *message;
+  mrb_int message_len;
+  mrb_value public_key_obj;
+
+  mrb_get_args(mrb, "Sso", &signature, &message, &message_len, &public_key_obj);
+
+  mrb_sodium_check_length(mrb, signature, crypto_sign_BYTES, "signature");
+  mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
+
+  const unsigned char *public_key = mrb_sodium_get_ptr(mrb, public_key_obj, "public_key");
+
+  int rc = crypto_sign_verify_detached((const unsigned char *) RSTRING_PTR(signature),
+    (const unsigned char *) message, (unsigned long long) message_len,
+    public_key);
+
+  switch(rc) {
+    case -1:
+      mrb_raise(mrb, E_CRYPTO_ERROR, "signature forged!");
+      break;
+    case 0:
+      return self;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_sign_open returned erroneous value %S", mrb_fixnum_value(rc));
   }
 }
 
@@ -713,7 +848,7 @@ void
 mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   struct RClass *sodium_mod, *secure_buffer_cl, *randombytes_mod, *crypto_mod,
     *crypto_secretbox_mod, *crypto_auth_mod, *crypto_aead_mod,
-    *crypto_aead_chacha20poly1305_mod, *crypto_box_mod, *crypto_generichash_cl;
+    *crypto_aead_chacha20poly1305_mod, *crypto_box_mod, *crypto_sign_mod, *crypto_generichash_cl;
 
   sodium_mod = mrb_define_module(mrb, "Sodium");
   mrb_define_class_under(mrb, sodium_mod, "Error", E_RUNTIME_ERROR);
@@ -736,6 +871,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, randombytes_mod, "buf",     mrb_randombytes_buf,      MRB_ARGS_REQ(1));
 
   crypto_mod = mrb_define_module(mrb, "Crypto");
+  mrb_define_class_under(mrb, crypto_mod, "Error", E_RUNTIME_ERROR);
   crypto_secretbox_mod = mrb_define_module_under(mrb, crypto_mod, "SecretBox");
   mrb_define_const(mrb, crypto_secretbox_mod, "KEYBYTES",   mrb_fixnum_value(crypto_secretbox_KEYBYTES));
   mrb_define_const(mrb, crypto_secretbox_mod, "MACBYTES",   mrb_fixnum_value(crypto_secretbox_MACBYTES));
@@ -770,6 +906,19 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_box_mod, "seed_keypair", mrb_crypto_box_seed_keypair,  MRB_ARGS_ARG(1, 1));
   mrb_define_module_function(mrb, crypto_mod,     "box",          mrb_crypto_box_easy,          MRB_ARGS_REQ(4));
   mrb_define_module_function(mrb, crypto_box_mod, "open",         mrb_crypto_box_open_easy,     MRB_ARGS_REQ(4));
+
+  crypto_sign_mod = mrb_define_module_under(mrb, crypto_mod, "Sign");
+  mrb_define_const(mrb, crypto_sign_mod, "PUBLICKEYBYTES",  mrb_fixnum_value(crypto_sign_PUBLICKEYBYTES));
+  mrb_define_const(mrb, crypto_sign_mod, "SECRETKEYBYTES",  mrb_fixnum_value(crypto_sign_SECRETKEYBYTES));
+  mrb_define_const(mrb, crypto_sign_mod, "BYTES",           mrb_fixnum_value(crypto_sign_BYTES));
+  mrb_define_const(mrb, crypto_sign_mod, "SEEDBYTES",       mrb_fixnum_value(crypto_sign_SEEDBYTES));
+  mrb_define_const(mrb, crypto_sign_mod, "PRIMITIVE",       mrb_str_new_static(mrb, crypto_sign_PRIMITIVE, strlen(crypto_sign_PRIMITIVE)));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "keypair",          mrb_crypto_sign_keypair,          MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "seed_keypair",     mrb_crypto_sign_seed_keypair,     MRB_ARGS_ARG(1, 1));
+  mrb_define_module_function(mrb, crypto_mod,       "sign",             mrb_crypto_sign,                  MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "open",             mrb_crypto_sign_open,             MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "detached",         mrb_crypto_sign_detached,         MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "verify_detached",  mrb_crypto_sign_verify_detached,  MRB_ARGS_REQ(3));
 
   crypto_generichash_cl = mrb_define_class_under(mrb, crypto_mod, "GenericHash", mrb->object_class);
   MRB_SET_INSTANCE_TT(crypto_generichash_cl, MRB_TT_DATA);
