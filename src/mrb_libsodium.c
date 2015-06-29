@@ -325,6 +325,9 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSo", &ciphertext, &ciphertext_len, &nonce, &key_obj);
 
+  if (ciphertext_len - crypto_secretbox_MACBYTES < 0)
+    mrb_raise(mrb, E_RANGE_ERROR, "ciphertext is too short");
+
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
@@ -414,12 +417,16 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSo|s", &message, &message_len, &nonce, &key_obj, &additional_data, &additional_data_len);
 
+  mrb_int sum;
+  if (mrb_int_add_overflow(message_len, crypto_aead_chacha20poly1305_ABYTES, &sum))
+    mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
+
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
   const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
   mrb_value ciphertext = mrb_str_buf_new(mrb,
-    (size_t) message_len + crypto_aead_chacha20poly1305_ABYTES);
+    (size_t) sum);
   unsigned long long ciphertext_len;
 
   int rc = crypto_aead_chacha20poly1305_encrypt((unsigned char *) RSTRING_PTR(ciphertext), &ciphertext_len,
@@ -524,12 +531,16 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSSo", &message, &message_len, &nonce, &public_key, &secret_key_obj);
 
+  mrb_int sum;
+  if (mrb_int_add_overflow(message_len, crypto_box_MACBYTES, &sum))
+    mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
+
   mrb_sodium_check_length(mrb, nonce, crypto_box_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, public_key, crypto_box_PUBLICKEYBYTES, "public_key");
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
   const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  mrb_value ciphertext = mrb_str_new(mrb, NULL, crypto_box_MACBYTES + message_len);
+  mrb_value ciphertext = mrb_str_new(mrb, NULL, sum);
 
   int rc = crypto_box_easy((unsigned char *) RSTRING_PTR(ciphertext),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -550,6 +561,9 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
   mrb_value nonce, public_key, secret_key_obj;
 
   mrb_get_args(mrb, "sSSo", &ciphertext, &ciphertext_len, &nonce, &public_key, &secret_key_obj);
+
+  if (ciphertext_len - crypto_box_MACBYTES < 0)
+    mrb_raise(mrb, E_RANGE_ERROR, "ciphertext is too short");
 
   mrb_sodium_check_length(mrb, nonce, crypto_box_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, public_key, crypto_box_PUBLICKEYBYTES, "public_key");
@@ -631,10 +645,14 @@ mrb_crypto_sign(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "so", &message, &message_len, &secret_key_obj);
 
+  mrb_int sum;
+  if(mrb_int_add_overflow(message_len, crypto_sign_BYTES, &sum))
+    mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
+
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
 
   const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  mrb_value signed_message = mrb_str_buf_new(mrb, crypto_sign_BYTES + message_len);
+  mrb_value signed_message = mrb_str_buf_new(mrb, sum);
   unsigned long long signed_message_len;
 
   int rc = crypto_sign((unsigned char *) RSTRING_PTR(signed_message), &signed_message_len,
@@ -930,7 +948,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
       return out;
       break;
     default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256 returned erroneous value %S", mrb_fixnum_value(rc));
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str returned erroneous value %S", mrb_fixnum_value(rc));
   }
 }
 

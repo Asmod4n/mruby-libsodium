@@ -7,6 +7,7 @@
 #include <mruby/data.h>
 #include <mruby/string.h>
 #include <mruby/class.h>
+#include <mruby/numeric.h>
 #include <mruby/variable.h>
 
 #endif
