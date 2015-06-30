@@ -83,10 +83,44 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
 {
-  char *b1_, *b2_;
+  mrb_value b1, b2;
+  void *b1_, *b2_;
   mrb_int b1_len, b2_len;
 
-  mrb_get_args(mrb, "ss", &b1_, &b1_len, &b2_, &b2_len);
+  mrb_get_args(mrb, "oo", &b1, &b2);
+
+  switch(mrb_type(b1)) {
+    case MRB_TT_DATA: {
+      b1_ = DATA_PTR(b1);
+      b1_len = mrb_int(mrb, mrb_funcall(mrb, b1, "size", 0));
+    }
+    break;
+    case MRB_TT_STRING: {
+      b1_ = RSTRING_PTR(b1);
+      b1_len = RSTRING_LEN(b1);
+    }
+    break;
+    default:
+      mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
+  }
+
+  switch(mrb_type(b2)) {
+    case MRB_TT_DATA: {
+      b2_ = DATA_PTR(b2);
+      b2_len = mrb_int(mrb, mrb_funcall(mrb, b2, "size", 0));
+    }
+    break;
+    case MRB_TT_STRING: {
+      b2_ = RSTRING_PTR(b2);
+      b2_len = RSTRING_LEN(b2);
+    }
+    break;
+    default:
+      mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
+  }
+
+  if ((b1_len < 0)||(b2_len < 0))
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "size mustn't ne negative");
 
   if (b1_len != b2_len)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "b1 and b2 size differ");
@@ -669,19 +703,18 @@ mrb_crypto_sign_open(mrb_state *mrb, mrb_value self)
 {
   char *signed_message;
   mrb_int signed_message_len;
-  mrb_value public_key_obj;
+  mrb_value public_key;
 
-  mrb_get_args(mrb, "so", &signed_message, &signed_message_len, &public_key_obj);
+  mrb_get_args(mrb, "sS", &signed_message, &signed_message_len, &public_key);
 
   mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
 
-  const unsigned char *public_key = mrb_sodium_get_ptr(mrb, public_key_obj, "public_key");
   mrb_value message = mrb_str_buf_new(mrb, signed_message_len);
   unsigned long long message_len;
 
   int rc = crypto_sign_open((unsigned char *) RSTRING_PTR(message), &message_len,
     (const unsigned char *) signed_message, (unsigned long long) signed_message_len,
-    public_key);
+    (const unsigned char *) RSTRING_PTR(public_key));
 
   switch(rc) {
     case -1:
@@ -725,18 +758,16 @@ mrb_crypto_sign_verify_detached(mrb_state *mrb, mrb_value self)
   mrb_value signature;
   char *message;
   mrb_int message_len;
-  mrb_value public_key_obj;
+  mrb_value public_key;
 
-  mrb_get_args(mrb, "Sso", &signature, &message, &message_len, &public_key_obj);
+  mrb_get_args(mrb, "SsS", &signature, &message, &message_len, &public_key);
 
   mrb_sodium_check_length(mrb, signature, crypto_sign_BYTES, "signature");
   mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
 
-  const unsigned char *public_key = mrb_sodium_get_ptr(mrb, public_key_obj, "public_key");
-
   int rc = crypto_sign_verify_detached((const unsigned char *) RSTRING_PTR(signature),
     (const unsigned char *) message, (unsigned long long) message_len,
-    public_key);
+    (const unsigned char *) RSTRING_PTR(public_key));
 
   switch(rc) {
     case -1:
@@ -746,7 +777,7 @@ mrb_crypto_sign_verify_detached(mrb_state *mrb, mrb_value self)
       return self;
       break;
     default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_sign_open returned erroneous value %S", mrb_fixnum_value(rc));
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_sign_verify_detached returned erroneous value %S", mrb_fixnum_value(rc));
   }
 }
 
