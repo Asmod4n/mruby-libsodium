@@ -1,5 +1,5 @@
 module Crypto
-  module Box
+  module Sign
     class << self
       alias :_keypair :keypair
 
@@ -12,10 +12,6 @@ module Crypto
           pk = _keypair(sk)
         end
         {primitive: PRIMITIVE, public_key: pk, secret_key: sk}
-      end
-
-      def nonce
-      RandomBytes.buf "\0" * NONCEBYTES
       end
     end
   end

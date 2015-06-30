@@ -188,6 +188,12 @@ mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_secure_buffer_to_str(mrb_state *mrb, mrb_value self)
+{
+  return mrb_str_new_static(mrb, DATA_PTR(self), mrb_int(mrb, mrb_funcall(mrb, self, "size", 0)));
+}
+
+static mrb_value
 mrb_secure_buffer_noaccess(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_noaccess(DATA_PTR(self));
@@ -1034,6 +1040,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, secure_buffer_cl, "initialize",  mrb_secure_buffer_init,       MRB_ARGS_REQ(1));
   mrb_define_method(mrb, secure_buffer_cl, "ptr",         mrb_secure_buffer_ptr,        MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "size",        mrb_secure_buffer_size,       MRB_ARGS_NONE());
+  mrb_define_method(mrb, secure_buffer_cl, "to_str",      mrb_secure_buffer_to_str,     MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "noaccess",    mrb_secure_buffer_noaccess,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readonly",    mrb_secure_buffer_readonly,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readwrite",   mrb_secure_buffer_readwrite,  MRB_ARGS_NONE());
@@ -1056,6 +1063,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   crypto_auth_mod = mrb_define_module_under(mrb, crypto_mod, "Auth");
   mrb_define_const(mrb, crypto_auth_mod, "BYTES",     mrb_fixnum_value(crypto_auth_BYTES));
   mrb_define_const(mrb, crypto_auth_mod, "KEYBYTES",  mrb_fixnum_value(crypto_auth_KEYBYTES));
+  mrb_define_const(mrb, crypto_auth_mod, "PRIMITIVE", mrb_str_new_static(mrb, crypto_auth_PRIMITIVE, strlen(crypto_auth_PRIMITIVE)));
   mrb_define_module_function(mrb, crypto_mod, "auth",         mrb_crypto_auth,        MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_auth_mod, "verify",  mrb_crypto_auth_verify, MRB_ARGS_REQ(3));
 
