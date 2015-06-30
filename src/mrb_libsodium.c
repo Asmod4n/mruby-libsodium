@@ -176,6 +176,12 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_secure_buffer_ptr(mrb_state *mrb, mrb_value self)
+{
+  return mrb_cptr_value(mrb, DATA_PTR(self));
+}
+
+static mrb_value
 mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"));
@@ -707,7 +713,7 @@ mrb_crypto_sign_open(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sS", &signed_message, &signed_message_len, &public_key);
 
-  mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
+  mrb_sodium_check_length(mrb, public_key, crypto_sign_PUBLICKEYBYTES, "public_key");
 
   mrb_value message = mrb_str_buf_new(mrb, signed_message_len);
   unsigned long long message_len;
@@ -763,7 +769,7 @@ mrb_crypto_sign_verify_detached(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "SsS", &signature, &message, &message_len, &public_key);
 
   mrb_sodium_check_length(mrb, signature, crypto_sign_BYTES, "signature");
-  mrb_sodium_check_length(mrb, public_key_obj, crypto_sign_PUBLICKEYBYTES, "public_key");
+  mrb_sodium_check_length(mrb, public_key, crypto_sign_PUBLICKEYBYTES, "public_key");
 
   int rc = crypto_sign_verify_detached((const unsigned char *) RSTRING_PTR(signature),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -1026,6 +1032,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
   mrb_define_method(mrb, secure_buffer_cl, "initialize",  mrb_secure_buffer_init,       MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, secure_buffer_cl, "ptr",         mrb_secure_buffer_ptr,        MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "size",        mrb_secure_buffer_size,       MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "noaccess",    mrb_secure_buffer_noaccess,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readonly",    mrb_secure_buffer_readonly,   MRB_ARGS_NONE());
