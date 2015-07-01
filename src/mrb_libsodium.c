@@ -190,6 +190,9 @@ mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_secure_buffer_to_str(mrb_state *mrb, mrb_value self)
 {
+#ifndef I_KNOW_THIS_IS_INSECURE
+  mrb_warn(mrb, "Treat this as a read only string, don't modify it or secret data may leak.\n");
+#endif
   return mrb_str_new_static(mrb, DATA_PTR(self), mrb_int(mrb, mrb_funcall(mrb, self, "size", 0)));
 }
 
