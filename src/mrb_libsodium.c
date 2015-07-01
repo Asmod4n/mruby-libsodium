@@ -351,7 +351,7 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   mrb_value ciphertext = mrb_str_new(mrb, NULL,
     (size_t) message_len + crypto_secretbox_MACBYTES);
 
@@ -380,7 +380,7 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   mrb_value message = mrb_str_new(mrb, NULL,
     (size_t) ciphertext_len - crypto_secretbox_MACBYTES);
 
@@ -412,7 +412,7 @@ mrb_crypto_auth(mrb_state *mrb, mrb_value self)
 
   mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   mrb_value mac = mrb_str_new(mrb, NULL, crypto_auth_BYTES);
 
   int rc = crypto_auth((unsigned char *) RSTRING_PTR(mac),
@@ -437,7 +437,7 @@ mrb_crypto_auth_verify(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, mac, crypto_auth_BYTES, "mac");
   mrb_sodium_check_length(mrb, key_obj, crypto_auth_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
 
   int rc = crypto_auth_verify((const unsigned char *) RSTRING_PTR(mac),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -473,9 +473,8 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
-  mrb_value ciphertext = mrb_str_buf_new(mrb,
-    (size_t) sum);
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
+  mrb_value ciphertext = mrb_str_buf_new(mrb, (size_t) sum);
   unsigned long long ciphertext_len;
 
   int rc = crypto_aead_chacha20poly1305_encrypt((unsigned char *) RSTRING_PTR(ciphertext), &ciphertext_len,
@@ -503,7 +502,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
 
-  const unsigned char *key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+  const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   mrb_value message = mrb_str_buf_new(mrb, (size_t) ciphertext_len);
   unsigned long long message_len;
 
@@ -537,7 +536,7 @@ mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
   if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
 
-  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  unsigned char *secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
@@ -560,8 +559,8 @@ mrb_crypto_box_seed_keypair(mrb_state *mrb, mrb_value self)
   if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
 
-  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  const unsigned char *seed = mrb_sodium_get_ptr(mrb, seed_obj, "seed");
+  unsigned char *secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *seed = (const unsigned char *) mrb_sodium_get_ptr(mrb, seed_obj, "seed");
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
@@ -588,7 +587,7 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, public_key, crypto_box_PUBLICKEYBYTES, "public_key");
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
-  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *secret_key = (const unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value ciphertext = mrb_str_new(mrb, NULL, sum);
 
   int rc = crypto_box_easy((unsigned char *) RSTRING_PTR(ciphertext),
@@ -618,7 +617,7 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, public_key, crypto_box_PUBLICKEYBYTES, "public_key");
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
-  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *secret_key = (const unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value message = mrb_str_new(mrb, NULL, (size_t) ciphertext_len - crypto_box_MACBYTES);
 
   int rc = crypto_box_open_easy((unsigned char *) RSTRING_PTR(message),
@@ -651,7 +650,7 @@ mrb_crypto_sign_keypair(mrb_state *mrb, mrb_value self)
   if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
 
-  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  unsigned char *secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
 
   int rc = crypto_sign_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
@@ -674,8 +673,8 @@ mrb_crypto_sign_seed_keypair(mrb_state *mrb, mrb_value self)
   if (mrb_string_p(secret_key_obj))
     mrb_str_modify(mrb, RSTRING(secret_key_obj));
 
-  unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  const unsigned char *seed = mrb_sodium_get_ptr(mrb, seed_obj, "seed");
+  unsigned char *secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *seed = (const unsigned char *) mrb_sodium_get_ptr(mrb, seed_obj, "seed");
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
 
   int rc = crypto_sign_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
@@ -700,7 +699,7 @@ mrb_crypto_sign(mrb_state *mrb, mrb_value self)
 
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
 
-  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *secret_key = (const unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value signed_message = mrb_str_buf_new(mrb, sum);
   unsigned long long signed_message_len;
 
@@ -754,7 +753,7 @@ mrb_crypto_sign_detached(mrb_state *mrb, mrb_value self)
 
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
 
-  const unsigned char *secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  const unsigned char *secret_key = (const unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
   mrb_value signature = mrb_str_buf_new(mrb, crypto_sign_BYTES);
   unsigned long long signature_len;
 
@@ -814,7 +813,7 @@ mrb_crypto_generichash(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(key_obj)) {
     keylen = (size_t) mrb_sodium_check_length_between(mrb, key_obj,
       crypto_generichash_KEYBYTES_MIN, crypto_generichash_KEYBYTES_MAX, "key");
-    key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+    key = (unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   }
 
   hash = mrb_str_new(mrb, NULL, (size_t) outlen);
@@ -845,7 +844,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(key_obj)) {
     keylen = (size_t) mrb_sodium_check_length_between(mrb, key_obj,
       crypto_generichash_KEYBYTES_MIN, crypto_generichash_KEYBYTES_MAX, "key");
-    key = mrb_sodium_get_ptr(mrb, key_obj, "key");
+    key = (unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   }
 
    state = sodium_malloc((sizeof(crypto_generichash_state)
@@ -927,10 +926,10 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
   if (memlimit < 0||memlimit > SIZE_MAX)
     mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
 
-  const unsigned char * const salt = mrb_sodium_get_ptr(mrb, salt_obj, "salt");
+  const unsigned char * const salt = (const unsigned char *) mrb_sodium_get_ptr(mrb, salt_obj, "salt");
   mrb_value secret_key_obj = mrb_obj_new(mrb,
     mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen);
-  unsigned char * const secret_key = mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  unsigned char * const secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
 
   errno = 0;
   int rc = crypto_pwhash_scryptsalsa208sha256(secret_key, (unsigned long long) mrb_int(mrb, outlen),
