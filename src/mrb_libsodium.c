@@ -352,7 +352,7 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
   mrb_int sum;
-  if(mrb_int_add_overflow(mrb, message_len, crypto_secretbox_MACBYTES, &sum))
+  if(mrb_int_add_overflow(message_len, crypto_secretbox_MACBYTES, &sum))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
