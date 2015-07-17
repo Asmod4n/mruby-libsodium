@@ -262,8 +262,10 @@ static mrb_value
 mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
 {
   mrb_value buf_obj;
+  mrb_int len;
+  mrb_bool len_given = FALSE;
 
-  mrb_get_args(mrb, "o", &buf_obj);
+  mrb_get_args(mrb, "o|i?", &buf_obj, &len, &len_given);
 
   switch(mrb_type(buf_obj)) {
     case MRB_TT_STRING:
@@ -271,15 +273,27 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       randombytes_buf(RSTRING_PTR(buf_obj), (size_t) RSTRING_LEN(buf_obj));
       break;
     case MRB_TT_DATA: {
-      mrb_int _size = mrb_int(mrb, mrb_funcall(mrb, buf_obj, "size", 0));
-      if (_size < 0||_size > SIZE_MAX)
+      if (!len_given)
+        len = mrb_int(mrb, mrb_funcall(mrb, buf_obj, "size", 0));
+
+      if (len < 0||len > SIZE_MAX)
         mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
-      randombytes_buf(DATA_PTR(buf_obj), (size_t) _size);
-      break;
+      randombytes_buf(DATA_PTR(buf_obj), (size_t) len);
     }
+      break;
+    case MRB_TT_CPTR: {
+      if (!len_given)
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "len missing");
+
+      if (len < 0||len > SIZE_MAX)
+        mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
+
+      randombytes_buf(mrb_cptr(buf_obj), (size_t) len);
+    }
+      break;
     default:
-      mrb_raise(mrb, E_TYPE_ERROR, "only works with Strings or Data Types");
+      mrb_raise(mrb, E_TYPE_ERROR, "only works with Strings or Data or cptr Types");
   }
 
   return buf_obj;
