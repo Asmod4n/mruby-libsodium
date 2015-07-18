@@ -27,7 +27,7 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "si|z", &hex, &hex_len, &bin_maxlen, &ignore);
 
-  if (bin_maxlen < 0)
+  if (unlikely(bin_maxlen < 0))
     mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_maxlen mustn't be negative");
 
   mrb_value bin = mrb_str_buf_new(mrb, (size_t) bin_maxlen);
@@ -119,7 +119,7 @@ mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
   }
 
-  if ((b1_len < 0)||(b2_len < 0))
+  if (unlikely((b1_len < 0)||(b2_len < 0)))
     mrb_raise(mrb, E_ARGUMENT_ERROR, "size mustn't ne negative");
 
   if (b1_len != b2_len)
@@ -157,18 +157,18 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "i", &size);
 
-  if (size < 0||size > SIZE_MAX)
+  if (unlikely(size < 0||size > SIZE_MAX))
     mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
   else {
     buffer = sodium_malloc((size_t) size);
-    if (buffer == NULL) {
-      mrb->out_of_memory = TRUE;
-      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
-    } else {
+    if (likely(buffer != NULL)) {
       mrb_data_init(self, buffer, &secure_buffer_type);
       mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "size"),
         mrb_fixnum_value(size));
+    } else {
+      mrb->out_of_memory = TRUE;
+      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
     }
   }
 
@@ -273,20 +273,20 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       randombytes_buf(RSTRING_PTR(buf_obj), (size_t) RSTRING_LEN(buf_obj));
       break;
     case MRB_TT_DATA: {
-      if (!len_given)
+      if (likely(!len_given))
         len = mrb_int(mrb, mrb_funcall(mrb, buf_obj, "size", 0));
 
-      if (len < 0||len > SIZE_MAX)
+      if (unlikely(len < 0||len > SIZE_MAX))
         mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
       randombytes_buf(DATA_PTR(buf_obj), (size_t) len);
     }
       break;
     case MRB_TT_CPTR: {
-      if (!len_given)
+      if (unlikely(!len_given))
         mrb_raise(mrb, E_ARGUMENT_ERROR, "len missing");
 
-      if (len < 0||len > SIZE_MAX)
+      if (unlikely(len < 0||len > SIZE_MAX))
         mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
       randombytes_buf(mrb_cptr(buf_obj), (size_t) len);
@@ -309,7 +309,7 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
   else
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "size", 0));
 
-  if (obj_size != sodium_const) {
+  if (unlikely(obj_size != sodium_const)) {
     mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length == %S bytes %S, got %S bytes",
       mrb_fixnum_value(sodium_const),
       mrb_str_new_static(mrb, reason, strlen(reason)),
@@ -327,7 +327,7 @@ mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, 
   else
     obj_size = mrb_int(mrb, mrb_funcall(mrb, data_obj, "size", 0));
 
-  if (obj_size < min||obj_size > max) {
+  if (unlikely(obj_size < min||obj_size > max)) {
     mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length between %S and %S (inclusive) bytes %S, got %S bytes",
       mrb_fixnum_value(min),
       mrb_fixnum_value(max),
@@ -366,7 +366,7 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
   mrb_int sum;
-  if(mrb_int_add_overflow(message_len, crypto_secretbox_MACBYTES, &sum))
+  if(unlikely(mrb_int_add_overflow(message_len, crypto_secretbox_MACBYTES, &sum)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
@@ -485,7 +485,7 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "sSo|s", &message, &message_len, &nonce, &key_obj, &additional_data, &additional_data_len);
 
   mrb_int sum;
-  if (mrb_int_add_overflow(message_len, crypto_aead_chacha20poly1305_ABYTES, &sum))
+  if (unlikely(mrb_int_add_overflow(message_len, crypto_aead_chacha20poly1305_ABYTES, &sum)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
@@ -598,7 +598,7 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "sSSo", &message, &message_len, &nonce, &public_key, &secret_key_obj);
 
   mrb_int sum;
-  if (mrb_int_add_overflow(message_len, crypto_box_MACBYTES, &sum))
+  if (unlikely(mrb_int_add_overflow(message_len, crypto_box_MACBYTES, &sum)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   mrb_sodium_check_length(mrb, nonce, crypto_box_NONCEBYTES, "nonce");
@@ -712,7 +712,7 @@ mrb_crypto_sign(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "so", &message, &message_len, &secret_key_obj);
 
   mrb_int sum;
-  if(mrb_int_add_overflow(message_len, crypto_sign_BYTES, &sum))
+  if(unlikely(mrb_int_add_overflow(message_len, crypto_sign_BYTES, &sum)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_sign_SECRETKEYBYTES, "secret_key");
@@ -825,7 +825,7 @@ mrb_crypto_generichash(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "s|io", &in, &inlen, &outlen, &key_obj);
 
-  if (outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX)
+  if (unlikely(outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX))
     mrb_raise(mrb, E_RANGE_ERROR, "outlen is out of range");
 
   if (!mrb_nil_p(key_obj)) {
@@ -856,7 +856,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|io", &outlen, &key_obj);
 
-  if (outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX)
+  if (unlikely(outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX))
     mrb_raise(mrb, E_RANGE_ERROR, "outlen is out of range");
 
   if (!mrb_nil_p(key_obj)) {
@@ -868,7 +868,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
    state = sodium_malloc((sizeof(crypto_generichash_state)
     + (size_t) 63U) & ~(size_t) 63U);
 
-  if (state) {
+  if (likely(state != NULL)) {
     mrb_data_init(self, state, &secure_buffer_type);
 
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "hash"),
@@ -936,12 +936,12 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "oso|ii", &outlen, &passwd, &passwdlen, &salt_obj, &opslimit, &memlimit);
 
-  if (mrb_int(mrb, outlen) < 0)
+  if (unlikely(mrb_int(mrb, outlen) < 0))
     mrb_raise(mrb, E_ARGUMENT_ERROR, "outlen mustn't be negative");
   mrb_sodium_check_length(mrb, salt_obj, crypto_pwhash_scryptsalsa208sha256_SALTBYTES, "salt");
-  if (opslimit < 0)
+  if (unlikely(opslimit < 0))
     mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
-  if (memlimit < 0||memlimit > SIZE_MAX)
+  if (unlikely(memlimit < 0||memlimit > SIZE_MAX))
     mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
 
   const unsigned char * const salt = (const unsigned char *) mrb_sodium_get_ptr(mrb, salt_obj, "salt");
@@ -963,7 +963,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
         mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
       }
       else
-        mrb_raise(mrb, E_SODIUM_ERROR, strerror(errno));
+        mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256");
     }
       break;
     case 0:
@@ -972,6 +972,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256 returned erroneous value %S", mrb_fixnum_value(rc));
   }
+
+  return self;
 }
 
 static mrb_value
@@ -984,9 +986,9 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "s|ii", &passwd, &passwdlen, &opslimit, &memlimit);
 
-  if (opslimit < 0)
+  if (unlikely(opslimit < 0))
     mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
-  if (memlimit < 0||memlimit > SIZE_MAX)
+  if (unlikely(memlimit < 0||memlimit > SIZE_MAX))
     mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
 
   mrb_value out = mrb_str_new(mrb, NULL, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1);
@@ -1004,7 +1006,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
         mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
       }
       else
-        mrb_raise(mrb, E_SODIUM_ERROR, strerror(errno));
+        mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str");
     }
       break;
     case 0:
@@ -1013,6 +1015,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str returned erroneous value %S", mrb_fixnum_value(rc));
   }
+
+  return self;
 }
 
 static mrb_value
@@ -1026,12 +1030,19 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
 
   mrb_sodium_check_length(mrb, str_obj, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1, "str");
 
+  errno = 0;
+
   int rc = crypto_pwhash_scryptsalsa208sha256_str_verify(RSTRING_PTR(str_obj),
     (const char * const) passwd, (unsigned long long) passwdlen);
 
   switch(rc) {
-    case -1:
+    case -1: {
+      if (errno == ENOMEM) {
+        mrb->out_of_memory = TRUE;
+        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+      }
       return mrb_false_value();
+    }
       break;
     case 0:
       return mrb_true_value();
