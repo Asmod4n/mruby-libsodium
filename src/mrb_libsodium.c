@@ -290,6 +290,8 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
         mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
 
       randombytes_buf(mrb_cptr(buf_obj), (size_t) len);
+
+      return mrb_fixnum_value(len);
     }
       break;
     default:
@@ -348,8 +350,11 @@ mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *reason)
     case MRB_TT_STRING:
       return RSTRING_PTR(obj);
       break;
+    case MRB_TT_CPTR:
+      return mrb_cptr(obj);
+      break;
     default:
-      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data or String Type", mrb_str_new_static(mrb, reason, strlen(reason)));
+      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data, String or cptr Type", mrb_str_new_static(mrb, reason, strlen(reason)));
   }
 }
 
@@ -1167,7 +1172,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str_verify", mrb_crypto_pwhash_scryptsalsa208sha256_str_verify,
     MRB_ARGS_REQ(2));
 
-  if (sodium_init() == -1)
+  if (unlikely(sodium_init() == -1))
     mrb_raise(mrb, E_SODIUM_ERROR, "cannot initialize libsodium");
 }
 
