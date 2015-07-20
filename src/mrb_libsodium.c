@@ -1,6 +1,14 @@
 ﻿#include "mruby/sodium.h"
 #include "mrb_libsodium.h"
 
+#if (__GNUC__ >= 3) || (__INTEL_COMPILER >= 800) || defined(__clang__)
+# define likely(x) __builtin_expect(!!(x), 1)
+# define unlikely(x) __builtin_expect(!!(x), 0)
+#else
+# define likely(x) (x)
+# define unlikely(x) (x)
+#endif
+
 static mrb_value
 mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 {
@@ -268,6 +276,12 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "o|i?", &buf_obj, &len, &len_given);
 
   switch(mrb_type(buf_obj)) {
+    case MRB_TT_FIXNUM: {
+      len = mrb_fixnum(buf_obj);
+      mrb_value buf = mrb_str_new(mrb, NULL, len);
+      randombytes_buf(RSTRING_PTR(buf), (size_t) len);
+      return buf;
+    }
     case MRB_TT_STRING:
       mrb_str_modify(mrb, RSTRING(buf_obj));
       randombytes_buf(RSTRING_PTR(buf_obj), (size_t) RSTRING_LEN(buf_obj));
@@ -291,7 +305,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
 
       randombytes_buf(mrb_cptr(buf_obj), (size_t) len);
 
-      return mrb_fixnum_value(len);
+      return mrb_nil_value();
     }
       break;
     default:
