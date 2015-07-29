@@ -1089,6 +1089,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
   mrb_define_method(mrb, secure_buffer_cl, "initialize",  mrb_secure_buffer_init,       MRB_ARGS_REQ(1));
   mrb_define_method(mrb, secure_buffer_cl, "ptr",         mrb_secure_buffer_ptr,        MRB_ARGS_NONE());
+  mrb_define_alias (mrb, secure_buffer_cl, "to_ptr", "ptr");
   mrb_define_method(mrb, secure_buffer_cl, "size",        mrb_secure_buffer_size,       MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "to_str",      mrb_secure_buffer_to_str,     MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "noaccess",    mrb_secure_buffer_noaccess,   MRB_ARGS_NONE());
