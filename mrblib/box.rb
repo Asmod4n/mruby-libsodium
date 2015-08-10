@@ -15,7 +15,7 @@ module Crypto
       end
 
       def nonce
-        RandomBytes.buf "\0" * NONCEBYTES
+        RandomBytes.buf NONCEBYTES
       end
     end
   end

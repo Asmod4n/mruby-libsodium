@@ -3,7 +3,7 @@ module Crypto
     module Chacha20Poly1305
       class << self
         def nonce
-          RandomBytes.buf "\0" * NPUBBYTES
+          RandomBytes.buf NPUBBYTES
         end
 
         def key
