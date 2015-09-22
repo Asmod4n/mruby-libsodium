@@ -198,10 +198,10 @@ mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_secure_buffer_to_str(mrb_state *mrb, mrb_value self)
 {
-#ifndef I_KNOW_THIS_IS_INSECURE
-  mrb_warn(mrb, "Treat this as a read only string, don't modify it or secret data may leak.\n");
-#endif
-  return mrb_str_new_static(mrb, DATA_PTR(self), mrb_int(mrb, mrb_funcall(mrb, self, "size", 0)));
+  mrb_value frozen_string = mrb_str_new_static(mrb, DATA_PTR(self), mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"))));
+  if (mrb_respond_to(mrb, frozen_string, mrb_intern_lit(mrb, "freeze")))
+    frozen_string = mrb_funcall(mrb, frozen_string, "freeze", 0);
+  return frozen_string;
 }
 
 static mrb_value
@@ -384,13 +384,13 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, nonce, crypto_secretbox_NONCEBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_secretbox_KEYBYTES, "key");
 
-  mrb_int sum;
-  if(unlikely(mrb_int_add_overflow(message_len, crypto_secretbox_MACBYTES, &sum)))
+  mrb_int ciphertext_len;
+  if(unlikely(mrb_int_add_overflow(message_len, crypto_secretbox_MACBYTES, &ciphertext_len)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   const unsigned char *key = (const unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
 
-  mrb_value ciphertext = mrb_str_new(mrb, NULL, (size_t) sum);
+  mrb_value ciphertext = mrb_str_new(mrb, NULL, (size_t) ciphertext_len);
 
   int rc = crypto_secretbox_easy((unsigned char *) RSTRING_PTR(ciphertext),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -616,8 +616,8 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSSo", &message, &message_len, &nonce, &public_key, &secret_key_obj);
 
-  mrb_int sum;
-  if (unlikely(mrb_int_add_overflow(message_len, crypto_box_MACBYTES, &sum)))
+  mrb_int ciphertext_len;
+  if (unlikely(mrb_int_add_overflow(message_len, crypto_box_MACBYTES, &ciphertext_len)))
     mrb_raise(mrb, E_RANGE_ERROR, "message_len is too large");
 
   mrb_sodium_check_length(mrb, nonce, crypto_box_NONCEBYTES, "nonce");
@@ -625,7 +625,7 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
   mrb_sodium_check_length(mrb, secret_key_obj, crypto_box_SECRETKEYBYTES, "secret_key");
 
   const unsigned char *secret_key = (const unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
-  mrb_value ciphertext = mrb_str_new(mrb, NULL, sum);
+  mrb_value ciphertext = mrb_str_new(mrb, NULL, ciphertext_len);
 
   int rc = crypto_box_easy((unsigned char *) RSTRING_PTR(ciphertext),
     (const unsigned char *) message, (unsigned long long) message_len,
@@ -940,7 +940,7 @@ mrb_crypto_generichash_final(mrb_state *mrb, mrb_value self)
 
   mrb_assert(rc == 0);
 
-  return hash;
+  return mrb_str_dup(mrb, hash);
 }
 
 static mrb_value
