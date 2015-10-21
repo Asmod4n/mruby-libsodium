@@ -175,8 +175,7 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
       mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "size"),
         mrb_fixnum_value(size));
     } else {
-      mrb->out_of_memory = TRUE;
-      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+      mrb_sys_fail(mrb, "sodium_malloc");
     }
   }
 
@@ -902,8 +901,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
 
     return self;
   } else {
-    mrb->out_of_memory = TRUE;
-    mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+    mrb_sys_fail(mrb, "sodium_malloc");
   }
 }
 
@@ -977,11 +975,6 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1: {
-      if (errno == ENOMEM) {
-        mrb->out_of_memory = TRUE;
-        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
-      }
-      else
         mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256");
     }
       break;
@@ -1020,11 +1013,6 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1: {
-      if (errno == ENOMEM) {
-        mrb->out_of_memory = TRUE;
-        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
-      }
-      else
         mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str");
     }
       break;
@@ -1057,8 +1045,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
   switch(rc) {
     case -1: {
       if (errno == ENOMEM) {
-        mrb->out_of_memory = TRUE;
-        mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+        mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str_verify");
       }
       return mrb_false_value();
     }
