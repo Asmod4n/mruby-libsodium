@@ -33,7 +33,7 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   char *hex, *ignore = NULL;
   mrb_int hex_len, bin_maxlen;
 
-  mrb_get_args(mrb, "si|z", &hex, &hex_len, &bin_maxlen, &ignore);
+  mrb_get_args(mrb, "si|z!", &hex, &hex_len, &bin_maxlen, &ignore);
 
   if (unlikely(bin_maxlen < 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_maxlen mustn't be negative");
@@ -66,7 +66,7 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
   mrb_value hex;
   char *ignore = NULL;
 
-  mrb_get_args(mrb, "S|z", &hex, &ignore);
+  mrb_get_args(mrb, "S|z!", &hex, &ignore);
 
   mrb_str_modify(mrb, RSTRING(hex));
   size_t bin_len;
@@ -103,13 +103,11 @@ mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
       b1_ = DATA_PTR(b1);
       mrb_value size_val = mrb_funcall(mrb, b1, "size", 0);
       b1_len = mrb_int(mrb, size_val);
-    }
-    break;
+    } break;
     case MRB_TT_STRING: {
       b1_ = RSTRING_PTR(b1);
       b1_len = RSTRING_LEN(b1);
-    }
-    break;
+    } break;
     default:
       mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
   }
@@ -119,13 +117,11 @@ mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
       b2_ = DATA_PTR(b2);
       mrb_value size_val = mrb_funcall(mrb, b2, "size", 0);
       b2_len = mrb_int(mrb, size_val);
-    }
-    break;
+    } break;
     case MRB_TT_STRING: {
       b2_ = RSTRING_PTR(b2);
       b2_len = RSTRING_LEN(b2);
-    }
-    break;
+    } break;
     default:
       mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
   }
@@ -310,8 +306,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       }
       buf_obj = mrb_str_new(mrb, NULL, len);
       randombytes_buf(RSTRING_PTR(buf_obj), len);
-    }
-      break;
+    } break;
     case MRB_TT_STRING:
       mrb_str_modify(mrb, RSTRING(buf_obj));
       randombytes_buf(RSTRING_PTR(buf_obj), RSTRING_LEN(buf_obj));
@@ -327,8 +322,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       }
 
       randombytes_buf(DATA_PTR(buf_obj), len);
-    }
-      break;
+    } break;
     case MRB_TT_CPTR: {
       if (unlikely(!len_given)) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "len missing");
@@ -341,8 +335,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       randombytes_buf(mrb_cptr(buf_obj), len);
 
       return mrb_nil_value();
-    }
-      break;
+    } break;
     default:
       mrb_raise(mrb, E_TYPE_ERROR, "only works with Strings, Data or cptr Types");
   }
@@ -544,7 +537,7 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
   char *additional_data = NULL;
   mrb_int additional_data_len = 0;
 
-  mrb_get_args(mrb, "sSo|s", &message, &message_len, &nonce, &key_obj, &additional_data, &additional_data_len);
+  mrb_get_args(mrb, "sSo|s!", &message, &message_len, &nonce, &key_obj, &additional_data, &additional_data_len);
 
   mrb_int sum;
   if (unlikely(mrb_int_add_overflow(message_len, crypto_aead_chacha20poly1305_ABYTES, &sum))) {
@@ -578,7 +571,7 @@ mrb_crypto_aead_chacha20poly1305_decrypt(mrb_state *mrb, mrb_value self)
   char *additional_data = NULL;
   mrb_int additional_data_len = 0;
 
-  mrb_get_args(mrb, "sSo|s", &ciphertext, &ciphertext_len, &nonce, &key_obj, &additional_data, &additional_data_len);
+  mrb_get_args(mrb, "sSo|s!", &ciphertext, &ciphertext_len, &nonce, &key_obj, &additional_data, &additional_data_len);
 
   mrb_sodium_check_length(mrb, nonce, crypto_aead_chacha20poly1305_NPUBBYTES, "nonce");
   mrb_sodium_check_length(mrb, key_obj, crypto_aead_chacha20poly1305_KEYBYTES, "key");
@@ -942,8 +935,6 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
 
   if (likely(state != NULL)) {
     mrb_data_init(self, state, &secure_buffer_type);
-    mrb_value hash = mrb_str_new(mrb, NULL, outlen);
-    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "hash"), hash);
 
     int rc = crypto_generichash_init(state,
       (const unsigned char *) key, keylen,
@@ -951,6 +942,9 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
 
     sodium_mprotect_noaccess(state);
     mrb_assert(rc == 0);
+
+    mrb_value hash = mrb_str_new(mrb, NULL, outlen);
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "hash"), hash);
   } else {
     mrb_sys_fail(mrb, "sodium_malloc");
   }
@@ -1032,9 +1026,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
     memlimit);
 
   switch(rc) {
-    case -1: {
-        mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256");
-    }
+    case -1:
+      mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256");
       break;
     case 0:
       return secret_key_obj;
@@ -1072,9 +1065,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
     memlimit);
 
   switch(rc) {
-    case -1: {
-        mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str");
-    }
+    case -1:
+      mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str");
       break;
     case 0:
       return out;
@@ -1107,8 +1099,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
         mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str_verify");
       }
       return mrb_false_value();
-    }
-      break;
+    } break;
     case 0:
       return mrb_true_value();
       break;
