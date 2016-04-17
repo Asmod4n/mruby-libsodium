@@ -22,7 +22,7 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
   char *h = sodium_bin2hex(RSTRING_PTR(hex), RSTRING_LEN(hex) + 1,
     (const unsigned char *) bin, bin_len);
 
-  mrb_assert(h);
+  assert(h);
 
   return hex;
 }
@@ -222,7 +222,7 @@ mrb_secure_buffer_noaccess(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_noaccess(DATA_PTR(self));
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return self;
 }
@@ -232,7 +232,7 @@ mrb_secure_buffer_readonly(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readonly(DATA_PTR(self));
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return self;
 }
@@ -242,7 +242,7 @@ mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readwrite(DATA_PTR(self));
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return self;
 }
@@ -264,7 +264,7 @@ mrb_randombytes_random(mrb_state *mrb, mrb_value self)
     }
     else
 #endif
-    return mrb_fixnum_value(ran);
+      return mrb_fixnum_value(ran);
   }
 }
 
@@ -333,8 +333,6 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       }
 
       randombytes_buf(mrb_cptr(buf_obj), len);
-
-      return mrb_nil_value();
     } break;
     default:
       mrb_raise(mrb, E_TYPE_ERROR, "only works with Strings, Data or cptr Types");
@@ -344,44 +342,44 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
 }
 
 static inline void
-mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const, const char *reason)
+mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const, const char *type)
 {
-  mrb_int obj_size;
+  mrb_value size_val;
 
   if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize"))) {
-    mrb_value size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
-    obj_size = mrb_int(mrb, size_val);
+    size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
   } else {
-    mrb_value size_val = mrb_funcall(mrb, data_obj, "size", 0);
-    obj_size = mrb_int(mrb, size_val);
+    size_val = mrb_funcall(mrb, data_obj, "size", 0);
   }
+
+  mrb_int obj_size = mrb_int(mrb, size_val);
 
   if (unlikely(obj_size != sodium_const)) {
     mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length == %S bytes %S, got %S bytes",
       mrb_fixnum_value(sodium_const),
-      mrb_str_new_static(mrb, reason, strlen(reason)),
+      mrb_str_new_static(mrb, type, strlen(type)),
       mrb_fixnum_value(obj_size));
   }
 }
 
 static inline mrb_int
-mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, size_t max, const char *reason)
+mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, size_t max, const char *type)
 {
-  mrb_int obj_size;
+  mrb_value size_val;
 
   if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize"))) {
-    mrb_value size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
-    obj_size = mrb_int(mrb, size_val);
+    size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
   } else {
-    mrb_value size_val = mrb_funcall(mrb, data_obj, "size", 0);
-    obj_size = mrb_int(mrb, size_val);
+    size_val = mrb_funcall(mrb, data_obj, "size", 0);
   }
+
+  mrb_int obj_size = mrb_int(mrb, size_val);
 
   if (unlikely(obj_size < min||obj_size > max)) {
     mrb_raisef(mrb, E_ARGUMENT_ERROR, "expected a length between %S and %S (inclusive) bytes %S, got %S bytes",
       mrb_fixnum_value(min),
       mrb_fixnum_value(max),
-      mrb_str_new_static(mrb, reason, strlen(reason)),
+      mrb_str_new_static(mrb, type, strlen(type)),
       mrb_fixnum_value(obj_size));
   }
 
@@ -389,7 +387,7 @@ mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, 
 }
 
 static inline void *
-mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *reason)
+mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *type)
 {
   switch(mrb_type(obj)) {
     case MRB_TT_DATA:
@@ -402,7 +400,7 @@ mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *reason)
       return mrb_cptr(obj);
       break;
     default:
-      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data, String or cptr Type", mrb_str_new_static(mrb, reason, strlen(reason)));
+      mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data, String or cptr Type", mrb_str_new_static(mrb, type, strlen(type)));
   }
 }
 
@@ -432,7 +430,7 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
     (const unsigned char *) RSTRING_PTR(nonce),
     key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return ciphertext;
 }
@@ -446,7 +444,7 @@ mrb_crypto_secretbox_open_easy(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSo", &ciphertext, &ciphertext_len, &nonce, &key_obj);
 
-  if (ciphertext_len - crypto_secretbox_MACBYTES < 0) {
+  if (ciphertext_len < crypto_secretbox_MACBYTES) {
     mrb_raise(mrb, E_RANGE_ERROR, "ciphertext is too short");
   }
 
@@ -492,7 +490,7 @@ mrb_crypto_auth(mrb_state *mrb, mrb_value self)
     (const unsigned char *) message, message_len,
     key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return mac;
 }
@@ -557,7 +555,7 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
     NULL, (const unsigned char *) RSTRING_PTR(nonce),
     key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return mrb_str_resize(mrb, ciphertext, ciphertext_len);
 }
@@ -616,7 +614,7 @@ mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
 
   int rc = crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return public_key;
 }
@@ -641,7 +639,7 @@ mrb_crypto_box_seed_keypair(mrb_state *mrb, mrb_value self)
 
   int rc = crypto_box_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return public_key;
 }
@@ -673,7 +671,7 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
     (const unsigned char *) RSTRING_PTR(public_key),
     secret_key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return ciphertext;
 }
@@ -687,7 +685,7 @@ mrb_crypto_box_open_easy(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "sSSo", &ciphertext, &ciphertext_len, &nonce, &public_key, &secret_key_obj);
 
-  if (ciphertext_len - crypto_box_MACBYTES < 0) {
+  if (ciphertext_len < crypto_box_MACBYTES) {
     mrb_raise(mrb, E_RANGE_ERROR, "ciphertext is too short");
   }
 
@@ -734,7 +732,7 @@ mrb_crypto_sign_keypair(mrb_state *mrb, mrb_value self)
 
   int rc = crypto_sign_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return public_key;
 }
@@ -759,7 +757,7 @@ mrb_crypto_sign_seed_keypair(mrb_state *mrb, mrb_value self)
 
   int rc = crypto_sign_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return public_key;
 }
@@ -788,7 +786,7 @@ mrb_crypto_sign(mrb_state *mrb, mrb_value self)
     (const unsigned char *) message, message_len,
     secret_key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return mrb_str_resize(mrb, signed_message, signed_message_len);
 }
@@ -842,7 +840,7 @@ mrb_crypto_sign_detached(mrb_state *mrb, mrb_value self)
     (const unsigned char *) message, message_len,
     secret_key);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return mrb_str_resize(mrb, signature, signature_len);
 }
@@ -904,7 +902,7 @@ mrb_crypto_generichash(mrb_state *mrb, mrb_value self)
     (const unsigned char *) in, inlen,
     (const unsigned char *) key, keylen);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return hash;
 }
@@ -941,7 +939,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
       outlen);
 
     sodium_mprotect_noaccess(state);
-    mrb_assert(rc == 0);
+    assert(rc == 0);
 
     mrb_value hash = mrb_str_new(mrb, NULL, outlen);
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "hash"), hash);
@@ -967,7 +965,7 @@ mrb_crypto_generichash_update(mrb_state *mrb, mrb_value self)
     (const unsigned char *) in, inlen);
   sodium_mprotect_noaccess(state);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return self;
 }
@@ -983,7 +981,7 @@ mrb_crypto_generichash_final(mrb_state *mrb, mrb_value self)
     (unsigned char *) RSTRING_PTR(hash), RSTRING_LEN(hash));
   sodium_mprotect_noaccess(state);
 
-  mrb_assert(rc == 0);
+  assert(rc == 0);
 
   return mrb_str_dup(mrb, hash);
 }
