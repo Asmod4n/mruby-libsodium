@@ -13,4 +13,18 @@
 #include <mruby/variable.h>
 #include <mruby/error.h>
 
+static void
+mrb_secure_buffer_destroy(mrb_state *mrb, void *p)
+{
+  sodium_free(p);
+}
+
+static const struct mrb_data_type secure_buffer_type = {
+  "$mrb_i_secure_buffer", mrb_secure_buffer_destroy,
+};
+
+static const struct mrb_data_type generic_hash_type = {
+  "$mrb_i_generic_hash_state", mrb_free,
+};
+
 #endif

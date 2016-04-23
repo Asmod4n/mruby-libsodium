@@ -21,7 +21,6 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 
   char *h = sodium_bin2hex(RSTRING_PTR(hex), RSTRING_LEN(hex) + 1,
     (const unsigned char *) bin, bin_len);
-
   assert(h);
 
   return hex;
@@ -42,7 +41,7 @@ mrb_sodium_hex2bin(mrb_state *mrb, mrb_value self)
   mrb_value bin = mrb_str_buf_new(mrb, bin_maxlen);
   size_t bin_len;
 
-  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(bin), bin_maxlen,
+  int rc = sodium_hex2bin((unsigned char *) RSTRING_PTR(bin), RSTRING_CAPA(bin),
     (const char *) hex, hex_len,
     (const char *) ignore,
     &bin_len,
@@ -148,16 +147,6 @@ mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
   }
 }
 
-static void
-mrb_secure_buffer_destroy(mrb_state *mrb, void *p)
-{
-  sodium_free(p);
-}
-
-static const struct mrb_data_type secure_buffer_type = {
-  "$mrb_i_secure_buffer", mrb_secure_buffer_destroy,
-};
-
 static mrb_value
 mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 {
@@ -169,6 +158,7 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
   }
 
+  errno = 0;
   void* buffer = sodium_malloc(size);
   if (likely(buffer != NULL)) {
     mrb_data_init(self, buffer, &secure_buffer_type);
@@ -211,17 +201,14 @@ mrb_secure_buffer_to_str(mrb_state *mrb, mrb_value self)
   mrb_value size_val = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"));
   mrb_int size = mrb_int(mrb, size_val);
   mrb_value frozen_string = mrb_str_new_static(mrb, DATA_PTR(self), size);
-  if (mrb_respond_to(mrb, frozen_string, mrb_intern_lit(mrb, "freeze"))) {
-    frozen_string = mrb_funcall(mrb, frozen_string, "freeze", 0);
-  }
-  return frozen_string;
+
+  return mrb_funcall(mrb, frozen_string, "freeze", 0);
 }
 
 static mrb_value
 mrb_secure_buffer_noaccess(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_noaccess(DATA_PTR(self));
-
   assert(rc == 0);
 
   return self;
@@ -231,7 +218,6 @@ static mrb_value
 mrb_secure_buffer_readonly(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readonly(DATA_PTR(self));
-
   assert(rc == 0);
 
   return self;
@@ -241,7 +227,6 @@ static mrb_value
 mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 {
   int rc = sodium_mprotect_readwrite(DATA_PTR(self));
-
   assert(rc == 0);
 
   return self;
@@ -429,7 +414,6 @@ mrb_crypto_secretbox_easy(mrb_state *mrb, mrb_value self)
     (const unsigned char *) message, message_len,
     (const unsigned char *) RSTRING_PTR(nonce),
     key);
-
   assert(rc == 0);
 
   return ciphertext;
@@ -489,7 +473,6 @@ mrb_crypto_auth(mrb_state *mrb, mrb_value self)
   int rc = crypto_auth((unsigned char *) RSTRING_PTR(mac),
     (const unsigned char *) message, message_len,
     key);
-
   assert(rc == 0);
 
   return mac;
@@ -554,7 +537,6 @@ mrb_crypto_aead_chacha20poly1305_encrypt(mrb_state *mrb, mrb_value self)
     (const unsigned char *) additional_data, additional_data_len,
     NULL, (const unsigned char *) RSTRING_PTR(nonce),
     key);
-
   assert(rc == 0);
 
   return mrb_str_resize(mrb, ciphertext, ciphertext_len);
@@ -613,7 +595,6 @@ mrb_crypto_box_keypair(mrb_state *mrb, mrb_value self)
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
-
   assert(rc == 0);
 
   return public_key;
@@ -638,7 +619,6 @@ mrb_crypto_box_seed_keypair(mrb_state *mrb, mrb_value self)
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_box_PUBLICKEYBYTES);
 
   int rc = crypto_box_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
-
   assert(rc == 0);
 
   return public_key;
@@ -670,7 +650,6 @@ mrb_crypto_box_easy(mrb_state *mrb, mrb_value self)
     (const unsigned char *) RSTRING_PTR(nonce),
     (const unsigned char *) RSTRING_PTR(public_key),
     secret_key);
-
   assert(rc == 0);
 
   return ciphertext;
@@ -731,7 +710,6 @@ mrb_crypto_sign_keypair(mrb_state *mrb, mrb_value self)
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
 
   int rc = crypto_sign_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key);
-
   assert(rc == 0);
 
   return public_key;
@@ -756,7 +734,6 @@ mrb_crypto_sign_seed_keypair(mrb_state *mrb, mrb_value self)
   mrb_value public_key = mrb_str_new(mrb, NULL, crypto_sign_PUBLICKEYBYTES);
 
   int rc = crypto_sign_seed_keypair((unsigned char *) RSTRING_PTR(public_key), secret_key, seed);
-
   assert(rc == 0);
 
   return public_key;
@@ -785,7 +762,6 @@ mrb_crypto_sign(mrb_state *mrb, mrb_value self)
   int rc = crypto_sign((unsigned char *) RSTRING_PTR(signed_message), &signed_message_len,
     (const unsigned char *) message, message_len,
     secret_key);
-
   assert(rc == 0);
 
   return mrb_str_resize(mrb, signed_message, signed_message_len);
@@ -839,7 +815,6 @@ mrb_crypto_sign_detached(mrb_state *mrb, mrb_value self)
   int rc = crypto_sign_detached((unsigned char *) RSTRING_PTR(signature), &signature_len,
     (const unsigned char *) message, message_len,
     secret_key);
-
   assert(rc == 0);
 
   return mrb_str_resize(mrb, signature, signature_len);
@@ -901,7 +876,6 @@ mrb_crypto_generichash(mrb_state *mrb, mrb_value self)
   int rc = crypto_generichash((unsigned char *) RSTRING_PTR(hash), RSTRING_LEN(hash),
     (const unsigned char *) in, inlen,
     (const unsigned char *) key, keylen);
-
   assert(rc == 0);
 
   return hash;
@@ -928,24 +902,16 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
     key = (unsigned char *) mrb_sodium_get_ptr(mrb, key_obj, "key");
   }
 
-   state = sodium_malloc((sizeof(crypto_generichash_state)
-    + (size_t) 63U) & ~(size_t) 63U);
+  state = (crypto_generichash_state *) mrb_malloc(mrb, sizeof(crypto_generichash_state));
 
-  if (likely(state != NULL)) {
-    mrb_data_init(self, state, &secure_buffer_type);
+  mrb_data_init(self, state, &generic_hash_type);
 
-    int rc = crypto_generichash_init(state,
-      (const unsigned char *) key, keylen,
-      outlen);
+  int rc = crypto_generichash_init(state,
+    (const unsigned char *) key, keylen,
+    outlen);
+  assert(rc == 0);
 
-    sodium_mprotect_noaccess(state);
-    assert(rc == 0);
-
-    mrb_value hash = mrb_str_new(mrb, NULL, outlen);
-    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "hash"), hash);
-  } else {
-    mrb_sys_fail(mrb, "sodium_malloc");
-  }
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "outlen"), mrb_fixnum_value(outlen));
 
   return self;
 }
@@ -958,13 +924,8 @@ mrb_crypto_generichash_update(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "s", &in, &inlen);
 
-  crypto_generichash_state *state = (crypto_generichash_state *) DATA_PTR(self);
-
-  sodium_mprotect_readwrite(state);
-  int rc = crypto_generichash_update(state,
+  int rc = crypto_generichash_update((crypto_generichash_state *) DATA_PTR(self),
     (const unsigned char *) in, inlen);
-  sodium_mprotect_noaccess(state);
-
   assert(rc == 0);
 
   return self;
@@ -973,17 +934,14 @@ mrb_crypto_generichash_update(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_crypto_generichash_final(mrb_state *mrb, mrb_value self)
 {
-  crypto_generichash_state *state = (crypto_generichash_state *) DATA_PTR(self);
-  mrb_value hash = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "hash"));
+  mrb_int outlen = mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "outlen")));
+  mrb_value hash = mrb_str_new(mrb, NULL, outlen);
 
-  sodium_mprotect_readwrite(state);
-  int rc = crypto_generichash_final(state,
-    (unsigned char *) RSTRING_PTR(hash), RSTRING_LEN(hash));
-  sodium_mprotect_noaccess(state);
-
+  int rc = crypto_generichash_final((crypto_generichash_state *) DATA_PTR(self),
+    (unsigned char *) RSTRING_PTR(hash), outlen);
   assert(rc == 0);
 
-  return mrb_str_dup(mrb, hash);
+  return hash;
 }
 
 static mrb_value
@@ -993,10 +951,10 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
   char *passwd;
   mrb_int passwdlen;
   mrb_value salt_obj;
-  mrb_int opslimit = crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE;
-  mrb_int memlimit = crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE;
+  mrb_int opslimit;
+  mrb_int memlimit;
 
-  mrb_get_args(mrb, "oso|ii", &outlen_val, &passwd, &passwdlen, &salt_obj, &opslimit, &memlimit);
+  mrb_get_args(mrb, "osoii", &outlen_val, &passwd, &passwdlen, &salt_obj, &opslimit, &memlimit);
 
   mrb_int outlen = mrb_int(mrb, outlen_val);
 
@@ -1042,10 +1000,10 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
 {
   char *passwd;
   mrb_int passwdlen;
-  mrb_int opslimit = crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE;
-  mrb_int memlimit = crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE;
+  mrb_int opslimit;
+  mrb_int memlimit;
 
-  mrb_get_args(mrb, "s|ii", &passwd, &passwdlen, &opslimit, &memlimit);
+  mrb_get_args(mrb, "sii", &passwd, &passwdlen, &opslimit, &memlimit);
 
   if (unlikely(opslimit < 0)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
@@ -1103,6 +1061,128 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
       break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str_verify returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+}
+
+static mrb_value
+mrb_crypto_pwhash(mrb_state *mrb, mrb_value self)
+{
+  mrb_value outlen_val;
+  char *passwd;
+  mrb_int passwdlen;
+  mrb_value salt_obj;
+  mrb_int opslimit;
+  mrb_int memlimit;
+  mrb_int alg;
+
+  mrb_get_args(mrb, "osoiii", &outlen_val, &passwd, &passwdlen, &salt_obj, &opslimit, &memlimit, &alg);
+
+  mrb_int outlen = mrb_int(mrb, outlen_val);
+
+  if (unlikely(outlen < 0)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "outlen mustn't be negative");
+  }
+  mrb_sodium_check_length(mrb, salt_obj, crypto_pwhash_SALTBYTES, "salt");
+  if (unlikely(opslimit < 0)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
+  }
+  if (unlikely(memlimit < 0||memlimit > SIZE_MAX)) {
+    mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
+  }
+
+  const unsigned char * const salt = (const unsigned char *) mrb_sodium_get_ptr(mrb, salt_obj, "salt");
+  mrb_value secret_key_obj = mrb_obj_new(mrb,
+    mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen_val);
+  unsigned char * const secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+
+  errno = 0;
+  int rc = crypto_pwhash(secret_key, outlen,
+    (const char * const) passwd, passwdlen,
+    salt,
+    opslimit,
+    memlimit,
+    alg);
+
+  switch(rc) {
+    case -1:
+      mrb_sys_fail(mrb, "crypto_pwhash");
+      break;
+    case 0:
+      return secret_key_obj;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+
+  return self;
+}
+
+static mrb_value
+mrb_crypto_pwhash_str(mrb_state *mrb, mrb_value self)
+{
+  char *passwd;
+  mrb_int passwdlen;
+  mrb_int opslimit;
+  mrb_int memlimit;
+
+  mrb_get_args(mrb, "sii", &passwd, &passwdlen, &opslimit, &memlimit);
+
+  if (unlikely(opslimit < 0)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "opslimit mustn't be negative");
+  }
+  if (unlikely(memlimit < 0||memlimit > SIZE_MAX)) {
+    mrb_raise(mrb, E_RANGE_ERROR, "memlimit is out of range");
+  }
+
+  mrb_value out = mrb_str_new(mrb, NULL, crypto_pwhash_STRBYTES - 1);
+
+  errno = 0;
+  int rc = crypto_pwhash_str(RSTRING_PTR(out),
+    (const char * const) passwd, passwdlen,
+    opslimit,
+    memlimit);
+
+  switch(rc) {
+    case -1:
+      mrb_sys_fail(mrb, "crypto_pwhash_str");
+      break;
+    case 0:
+      return out;
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_str returned erroneous value %S", mrb_fixnum_value(rc));
+  }
+
+  return self;
+}
+
+static mrb_value
+mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
+{
+  mrb_value str_obj;
+  char *passwd;
+  mrb_int passwdlen;
+
+  mrb_get_args(mrb, "Ss", &str_obj, &passwd, &passwdlen);
+
+  mrb_sodium_check_length(mrb, str_obj, crypto_pwhash_STRBYTES - 1, "str");
+
+  errno = 0;
+  int rc = crypto_pwhash_str_verify(RSTRING_PTR(str_obj),
+    (const char * const) passwd, passwdlen);
+
+  switch(rc) {
+    case -1: {
+      if (errno == ENOMEM) {
+        mrb_sys_fail(mrb, "crypto_pwhash_str_verify");
+      }
+      return mrb_false_value();
+    } break;
+    case 0:
+      return mrb_true_value();
+      break;
+    default:
+      mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_str_verify returned erroneous value %S", mrb_fixnum_value(rc));
   }
 }
 
@@ -1205,7 +1285,21 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, crypto_generichash_cl, "final",        mrb_crypto_generichash_final, MRB_ARGS_NONE());
 
   crypto_pwhash_mod = mrb_define_module_under(mrb, crypto_mod, "PwHash");
-  mrb_define_module_function(mrb, crypto_pwhash_mod,  "scryptsalsa208sha256", mrb_crypto_pwhash_scryptsalsa208sha256, MRB_ARGS_ARG(3, 2));
+  mrb_define_const(mrb, crypto_pwhash_mod, "ALG_ARGON2I13", mrb_fixnum_value(crypto_pwhash_ALG_ARGON2I13));
+  mrb_define_const(mrb, crypto_pwhash_mod, "ALG_DEFAULT", mrb_fixnum_value(crypto_pwhash_ALG_DEFAULT));
+  mrb_define_const(mrb, crypto_pwhash_mod, "SALTBYTES", mrb_fixnum_value(crypto_pwhash_SALTBYTES));
+  mrb_define_const(mrb, crypto_pwhash_mod, "STRBYTES", mrb_fixnum_value(crypto_pwhash_STRBYTES));
+  mrb_define_const(mrb, crypto_pwhash_mod, "STRPREFIX", mrb_str_new_static(mrb, crypto_pwhash_STRPREFIX, strlen(crypto_pwhash_STRPREFIX)));
+  mrb_define_const(mrb, crypto_pwhash_mod, "OPSLIMIT_INTERACTIVE", mrb_fixnum_value(crypto_pwhash_OPSLIMIT_INTERACTIVE));
+  mrb_define_const(mrb, crypto_pwhash_mod, "MEMLIMIT_INTERACTIVE", mrb_fixnum_value(crypto_pwhash_MEMLIMIT_INTERACTIVE));
+  mrb_define_const(mrb, crypto_pwhash_mod, "OPSLIMIT_MODERATE", mrb_fixnum_value(crypto_pwhash_OPSLIMIT_MODERATE));
+  mrb_define_const(mrb, crypto_pwhash_mod, "MEMLIMIT_MODERATE", mrb_fixnum_value(crypto_pwhash_MEMLIMIT_MODERATE));
+  mrb_define_const(mrb, crypto_pwhash_mod, "OPSLIMIT_SENSITIVE", mrb_fixnum_value(crypto_pwhash_OPSLIMIT_SENSITIVE));
+  mrb_define_const(mrb, crypto_pwhash_mod, "MEMLIMIT_SENSITIVE", mrb_fixnum_value(crypto_pwhash_MEMLIMIT_SENSITIVE));
+  mrb_define_module_function(mrb, crypto_mod,  "pwhash", mrb_crypto_pwhash, MRB_ARGS_REQ(6));
+  mrb_define_module_function(mrb, crypto_pwhash_mod,  "str", mrb_crypto_pwhash_str, MRB_ARGS_REQ(3));
+  mrb_define_module_function(mrb, crypto_pwhash_mod,  "str_verify", mrb_crypto_pwhash_str_verify, MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, crypto_pwhash_mod,  "scryptsalsa208sha256", mrb_crypto_pwhash_scryptsalsa208sha256, MRB_ARGS_REQ(5));
   crypto_pwhash_scryptsalsa208sha256_mod = mrb_define_module_under(mrb, crypto_pwhash_mod, "ScryptSalsa208SHA256");
   mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "SALTBYTES", mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_SALTBYTES));
   mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "STRBYTES", mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_STRBYTES));
@@ -1219,7 +1313,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
     mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_SENSITIVE));
   mrb_define_const(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "MEMLIMIT_SENSITIVE",
     mrb_fixnum_value(crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_SENSITIVE));
-  mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str", mrb_crypto_pwhash_scryptsalsa208sha256_str, MRB_ARGS_ARG(1, 2));
+  mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str", mrb_crypto_pwhash_scryptsalsa208sha256_str, MRB_ARGS_REQ(3));
   mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str_verify", mrb_crypto_pwhash_scryptsalsa208sha256_str_verify,
     MRB_ARGS_REQ(2));
 
@@ -1228,8 +1322,4 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   }
 }
 
-void
-mrb_mruby_libsodium_gem_final(mrb_state* mrb) {
-  /* finalizer */
-}
-
+void mrb_mruby_libsodium_gem_final(mrb_state* mrb) { }
