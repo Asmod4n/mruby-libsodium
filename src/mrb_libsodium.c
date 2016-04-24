@@ -239,18 +239,20 @@ mrb_randombytes_random(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|b", &limit);
 
+#ifdef MRB_INT64
+  return mrb_fixnum_value(randombytes_random());
+#else
   if (limit) {
     return mrb_fixnum_value(randombytes_uniform(MRB_INT_MAX));
   } else {
     uint32_t ran = randombytes_random();
-#ifndef MRB_INT64
-    if (ran > MRB_INT_MAX) {
+    if (MRB_INT_MAX < ran ) {
       return mrb_float_value(mrb, ran);
-    }
-    else
-#endif
+    } else {
       return mrb_fixnum_value(ran);
+    }
   }
+#endif
 }
 
 static mrb_value
