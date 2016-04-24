@@ -11,6 +11,7 @@
       spec.cc.defines << 'SODIUM_STATIC'
       sh "cd #{dir} && git submodule init && git submodule update && cd libsodium\\builds\\msvc\\build && buildbase.bat ..\\vs2015\\libsodium.sln 14"
       spec.linker.flags << "#{dir}\\libsodium\\bin\\#{ENV['Platform']}\\Release\\v140\\static\\libsodium.lib"
+      spec.cc.include_paths << "#{dir}\\libsodium\\src\\libsodium\\include"
     end
   else
     if spec.cc.search_header_path 'sodium.h'
@@ -19,8 +20,9 @@
       warn "#{spec.name}: cannot find libsodium, building it"
       ENV['CFLAGS'] = spec.cc.flags.join(' ')
       ENV['LDFLAGS'] = spec.linker.flags.join(' ')
-      sh "cd #{spec.dir} && git submodule init && git submodule update && cd libsodium && ./autogen.sh && ./configure --enable-minimal --prefix=#{spec.dir} --disable-shared && make -j4 && make -j4 check && make install"
-      spec.linker.flags << "#{spec.dir}/lib/libsodium.a"
+      sh "cd #{spec.dir} && git submodule init && git submodule update && cd libsodium && ./configure --enable-minimal --prefix=#{spec.build_dir} --disable-shared && make -j4 && make -j4 check && make install"
+      spec.linker.flags << "#{spec.build_dir}/lib/libsodium.a"
+      spec.cc.include_paths << "#{spec.build_dir}/include"
     end
   end
   spec.add_dependency 'mruby-errno'
