@@ -17,7 +17,9 @@
       spec.linker.libraries << 'sodium'
     else
       warn "#{spec.name}: cannot find libsodium, building it"
-      sh "cd #{spec.dir} && git submodule init && git submodule update && cd libsodium && ./autogen.sh && ./configure --enable-minimal --enable-opt --prefix=#{spec.dir} --disable-shared && make -j4 && make -j4 check && make install"
+      ENV['CFLAGS'] = spec.cc.flags.join(' ')
+      ENV['LDFLAGS'] = spec.linker.flags.join(' ')
+      sh "cd #{spec.dir} && git submodule init && git submodule update && cd libsodium && ./autogen.sh && ./configure --enable-minimal --prefix=#{spec.dir} --disable-shared && make -j4 && make -j4 check && make install"
       spec.linker.flags << "#{spec.dir}/lib/libsodium.a"
     end
   end
