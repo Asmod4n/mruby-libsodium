@@ -10,7 +10,7 @@
       dir = spec.dir.gsub('/', '\\')
       spec.cc.defines << 'SODIUM_STATIC'
       sh "cd #{dir} && git submodule init && git submodule update && cd libsodium\\builds\\msvc\\build && buildbase.bat ..\\vs2015\\libsodium.sln 14"
-      spec.linker.flags << "#{dir}\\libsodium\\bin\\#{ENV['Platform']}\\Release\\v140\\static\\libsodium.lib"
+      spec.linker.flags << "#{dir}\\libsodium\\bin\\#{ENV['Platform']||'Win32'}\\Release\\v140\\static\\libsodium.lib"
       spec.cc.include_paths << "#{dir}\\libsodium\\src\\libsodium\\include"
     end
   else
