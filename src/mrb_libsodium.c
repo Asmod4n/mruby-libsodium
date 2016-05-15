@@ -1053,7 +1053,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
 
   switch(rc) {
     case -1: {
-      if (errno == ENOMEM) {
+      if (errno) {
         mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str_verify");
       }
       return mrb_false_value();
@@ -1175,7 +1175,7 @@ mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
 
   switch(rc) {
     case -1: {
-      if (errno == ENOMEM) {
+      if (errno) {
         mrb_sys_fail(mrb, "crypto_pwhash_str_verify");
       }
       return mrb_false_value();
