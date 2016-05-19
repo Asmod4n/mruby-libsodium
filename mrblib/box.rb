@@ -1,8 +1,6 @@
 module Crypto
   module Box
     class << self
-      alias :_keypair :keypair
-
       def keypair(seed = nil)
         sk = Sodium::SecureBuffer.new SECRETKEYBYTES
         pk = nil

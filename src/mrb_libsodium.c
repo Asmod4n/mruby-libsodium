@@ -328,7 +328,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
   return buf_obj;
 }
 
-static inline void
+MRB_INLINE void
 mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const, const char *type)
 {
   mrb_value size_val;
@@ -349,7 +349,7 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
   }
 }
 
-static inline mrb_int
+MRB_INLINE mrb_int
 mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, size_t max, const char *type)
 {
   mrb_value size_val;
@@ -373,7 +373,7 @@ mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, 
   return obj_size;
 }
 
-static inline void *
+MRB_INLINE void *
 mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *type)
 {
   switch(mrb_type(obj)) {
@@ -1252,7 +1252,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_box_mod, "SEEDBYTES",      mrb_fixnum_value(crypto_box_SEEDBYTES));
   mrb_define_const(mrb, crypto_box_mod, "BEFORENMBYTES",  mrb_fixnum_value(crypto_box_BEFORENMBYTES));
   mrb_define_const(mrb, crypto_box_mod, "PRIMITIVE",      mrb_str_new_static(mrb, crypto_box_PRIMITIVE, strlen(crypto_box_PRIMITIVE)));
-  mrb_define_module_function(mrb, crypto_box_mod, "keypair",      mrb_crypto_box_keypair,       MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, crypto_box_mod, "_keypair",     mrb_crypto_box_keypair,       MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, crypto_box_mod, "seed_keypair", mrb_crypto_box_seed_keypair,  MRB_ARGS_ARG(1, 1));
   mrb_define_module_function(mrb, crypto_mod,     "box",          mrb_crypto_box_easy,          MRB_ARGS_REQ(4));
   mrb_define_module_function(mrb, crypto_box_mod, "open",         mrb_crypto_box_open_easy,     MRB_ARGS_REQ(4));
@@ -1263,7 +1263,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_sign_mod, "BYTES",           mrb_fixnum_value(crypto_sign_BYTES));
   mrb_define_const(mrb, crypto_sign_mod, "SEEDBYTES",       mrb_fixnum_value(crypto_sign_SEEDBYTES));
   mrb_define_const(mrb, crypto_sign_mod, "PRIMITIVE",       mrb_str_new_static(mrb, crypto_sign_PRIMITIVE, strlen(crypto_sign_PRIMITIVE)));
-  mrb_define_module_function(mrb, crypto_sign_mod,  "keypair",          mrb_crypto_sign_keypair,          MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, crypto_sign_mod,  "_keypair",         mrb_crypto_sign_keypair,          MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, crypto_sign_mod,  "seed_keypair",     mrb_crypto_sign_seed_keypair,     MRB_ARGS_ARG(1, 1));
   mrb_define_module_function(mrb, crypto_mod,       "sign",             mrb_crypto_sign,                  MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, crypto_sign_mod,  "open",             mrb_crypto_sign_open,             MRB_ARGS_REQ(2));
@@ -1319,8 +1319,9 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str_verify", mrb_crypto_pwhash_scryptsalsa208sha256_str_verify,
     MRB_ARGS_REQ(2));
 
+  errno = 0;
   if (unlikely(sodium_init() == -1)) {
-    mrb_raise(mrb, E_SODIUM_ERROR, "cannot initialize libsodium");
+    mrb_sys_fail(mrb, "sodium_init");
   }
 }
 
