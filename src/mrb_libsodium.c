@@ -17,7 +17,12 @@ mrb_sodium_bin2hex(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "s", &bin, &bin_len);
 
-  mrb_value hex = mrb_str_new(mrb, NULL, bin_len * 2);
+  mrb_int hex_len;
+  if(unlikely(mrb_int_mul_overflow(bin_len, 2, &hex_len))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "bin_len is too large");
+  }
+
+  mrb_value hex = mrb_str_new(mrb, NULL, hex_len);
 
   char *h = sodium_bin2hex(RSTRING_PTR(hex), RSTRING_LEN(hex) + 1,
     (const unsigned char *) bin, bin_len);
@@ -856,12 +861,12 @@ mrb_crypto_generichash(mrb_state *mrb, mrb_value self)
 {
   mrb_value hash;
   char *in;
-  mrb_int inlen, outlen = crypto_generichash_BYTES;
+  mrb_int inlen, outlen;
   mrb_value key_obj = mrb_nil_value();
   unsigned char *key = NULL;
   size_t keylen = 0;
 
-  mrb_get_args(mrb, "s|io", &in, &inlen, &outlen, &key_obj);
+  mrb_get_args(mrb, "si|o", &in, &inlen, &outlen, &key_obj);
 
   if (unlikely(outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX)) {
     mrb_raise(mrb, E_RANGE_ERROR, "outlen is out of range");
@@ -889,10 +894,10 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
   crypto_generichash_state *state;
   unsigned char *key = NULL;
   size_t keylen = 0;
-  mrb_int outlen = crypto_generichash_BYTES;
+  mrb_int outlen;
   mrb_value key_obj = mrb_nil_value();
 
-  mrb_get_args(mrb, "|io", &outlen, &key_obj);
+  mrb_get_args(mrb, "i|o", &outlen, &key_obj);
 
   if (unlikely(outlen < crypto_generichash_BYTES_MIN||outlen > crypto_generichash_BYTES_MAX)) {
     mrb_raise(mrb, E_RANGE_ERROR, "outlen is out of range");
@@ -936,11 +941,10 @@ mrb_crypto_generichash_update(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_crypto_generichash_final(mrb_state *mrb, mrb_value self)
 {
-  mrb_int outlen = mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "outlen")));
-  mrb_value hash = mrb_str_new(mrb, NULL, outlen);
+  mrb_value hash = mrb_str_new(mrb, NULL, mrb_fixnum(mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "outlen"))));
 
   int rc = crypto_generichash_final((crypto_generichash_state *) DATA_PTR(self),
-    (unsigned char *) RSTRING_PTR(hash), outlen);
+    (unsigned char *) RSTRING_PTR(hash), RSTRING_LEN(hash));
   assert(rc == 0);
 
   return hash;
@@ -974,7 +978,7 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
   const unsigned char * const salt = (const unsigned char *) mrb_sodium_get_ptr(mrb, salt_obj, "salt");
   mrb_value secret_key_obj = mrb_obj_new(mrb,
     mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen_val);
-  unsigned char * const secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  unsigned char * const secret_key = (unsigned char *) DATA_PTR(secret_key_obj);
 
   errno = 0;
   int rc = crypto_pwhash_scryptsalsa208sha256(secret_key, outlen,
@@ -1095,7 +1099,7 @@ mrb_crypto_pwhash(mrb_state *mrb, mrb_value self)
   const unsigned char * const salt = (const unsigned char *) mrb_sodium_get_ptr(mrb, salt_obj, "salt");
   mrb_value secret_key_obj = mrb_obj_new(mrb,
     mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen_val);
-  unsigned char * const secret_key = (unsigned char *) mrb_sodium_get_ptr(mrb, secret_key_obj, "secret_key");
+  unsigned char * const secret_key = (unsigned char *) DATA_PTR(secret_key_obj);
 
   errno = 0;
   int rc = crypto_pwhash(secret_key, outlen,
@@ -1189,7 +1193,8 @@ mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
 }
 
 void
-mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
+mrb_mruby_libsodium_gem_init(mrb_state* mrb)
+{
   struct RClass *sodium_mod, *secure_buffer_cl, *randombytes_mod, *crypto_mod,
     *crypto_secretbox_mod, *crypto_auth_mod, *crypto_aead_mod,
     *crypto_aead_chacha20poly1305_mod, *crypto_box_mod, *crypto_sign_mod, *crypto_generichash_cl,
@@ -1280,8 +1285,8 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, crypto_generichash_cl,  "KEYBYTES_MAX", mrb_fixnum_value(crypto_generichash_KEYBYTES_MAX));
   mrb_define_const(mrb, crypto_generichash_cl,  "PRIMITIVE",    mrb_str_new_static(mrb,
     crypto_generichash_PRIMITIVE, strlen(crypto_generichash_PRIMITIVE)));
-  mrb_define_module_function(mrb, crypto_mod,   "generichash",  mrb_crypto_generichash, MRB_ARGS_ARG(1, 2));
-  mrb_define_method(mrb, crypto_generichash_cl, "initialize",   mrb_crypto_generichash_init, MRB_ARGS_OPT(2));
+  mrb_define_module_function(mrb, crypto_mod,   "generichash",  mrb_crypto_generichash, MRB_ARGS_ARG(2, 1));
+  mrb_define_method(mrb, crypto_generichash_cl, "initialize",   mrb_crypto_generichash_init, MRB_ARGS_ARG(1, 1));
   mrb_define_method(mrb, crypto_generichash_cl, "update",       mrb_crypto_generichash_update, MRB_ARGS_REQ(1));
   mrb_define_alias (mrb, crypto_generichash_cl, "<<", "update");
   mrb_define_method(mrb, crypto_generichash_cl, "final",        mrb_crypto_generichash_final, MRB_ARGS_NONE());
@@ -1325,4 +1330,4 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb) {
   }
 }
 
-void mrb_mruby_libsodium_gem_final(mrb_state* mrb) { }
+void mrb_mruby_libsodium_gem_final(mrb_state* mrb) {}
