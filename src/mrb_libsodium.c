@@ -1222,7 +1222,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   randombytes_mod = mrb_define_module(mrb, "RandomBytes");
   mrb_define_module_function(mrb, randombytes_mod, "random",  mrb_randombytes_random,   MRB_ARGS_OPT(1));
   mrb_define_module_function(mrb, randombytes_mod, "uniform", mrb_randombytes_uniform,  MRB_ARGS_REQ(1));
-  mrb_define_module_function(mrb, randombytes_mod, "buf",     mrb_randombytes_buf,      MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, randombytes_mod, "buf",     mrb_randombytes_buf,      MRB_ARGS_ARG(1, 1));
 
   crypto_mod = mrb_define_module(mrb, "Crypto");
   mrb_define_class_under(mrb, crypto_mod, "Error", E_RUNTIME_ERROR);
