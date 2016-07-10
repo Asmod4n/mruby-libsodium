@@ -94,65 +94,6 @@ mrb_sodium_hex2bin_dash(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_sodium_memcmp(mrb_state *mrb, mrb_value self)
-{
-  mrb_value b1, b2;
-  void *b1_, *b2_;
-  mrb_int b1_len, b2_len;
-
-  mrb_get_args(mrb, "oo", &b1, &b2);
-
-  switch(mrb_type(b1)) {
-    case MRB_TT_DATA: {
-      b1_ = DATA_PTR(b1);
-      mrb_value size_val = mrb_funcall(mrb, b1, "size", 0);
-      b1_len = mrb_int(mrb, size_val);
-    } break;
-    case MRB_TT_STRING: {
-      b1_ = RSTRING_PTR(b1);
-      b1_len = RSTRING_LEN(b1);
-    } break;
-    default:
-      mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
-  }
-
-  switch(mrb_type(b2)) {
-    case MRB_TT_DATA: {
-      b2_ = DATA_PTR(b2);
-      mrb_value size_val = mrb_funcall(mrb, b2, "size", 0);
-      b2_len = mrb_int(mrb, size_val);
-    } break;
-    case MRB_TT_STRING: {
-      b2_ = RSTRING_PTR(b2);
-      b2_len = RSTRING_LEN(b2);
-    } break;
-    default:
-      mrb_raise(mrb, E_TYPE_ERROR, "only works with Data or String types");
-  }
-
-  if (unlikely((b1_len < 0)||(b2_len < 0))) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "size mustn't ne negative");
-  }
-
-  if (b1_len != b2_len) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "b1 and b2 size differ");
-  }
-
-  int rc = sodium_memcmp(b1_, b2_, b1_len);
-
-  switch(rc) {
-    case -1:
-      return mrb_false_value();
-      break;
-    case 0:
-      return mrb_true_value();
-      break;
-    default:
-      mrb_raisef(mrb, E_SODIUM_ERROR, "sodium_memcmp returned erroneous value %S", mrb_fixnum_value(rc));
-  }
-}
-
-static mrb_value
 mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 {
   mrb_int size;
@@ -167,7 +108,7 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
   void* buffer = sodium_malloc(size);
   if (likely(buffer != NULL)) {
     mrb_data_init(self, buffer, &secure_buffer_type);
-    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "size"),
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "bytesize"),
       mrb_fixnum_value(size));
   } else {
     mrb_sys_fail(mrb, "sodium_malloc");
@@ -179,11 +120,9 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_secure_buffer_free(mrb_state *mrb, mrb_value self)
 {
-  if (DATA_PTR(self) != NULL) {
-    sodium_free(DATA_PTR(self));
-    mrb_data_init(self, NULL, NULL);
-    mrb_iv_remove(mrb, self, mrb_intern_lit(mrb, "size"));
-  }
+  sodium_free(DATA_PTR(self));
+  mrb_data_init(self, NULL, NULL);
+  mrb_iv_remove(mrb, self, mrb_intern_lit(mrb, "bytesize"));
 
   return mrb_nil_value();
 }
@@ -195,15 +134,15 @@ mrb_secure_buffer_ptr(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_secure_buffer_size(mrb_state *mrb, mrb_value self)
+mrb_secure_buffer_bytesize(mrb_state *mrb, mrb_value self)
 {
-  return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"));
+  return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "bytesize"));
 }
 
 static mrb_value
 mrb_secure_buffer_to_str(mrb_state *mrb, mrb_value self)
 {
-  mrb_value size_val = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "size"));
+  mrb_value size_val = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "bytesize"));
   mrb_int size = mrb_int(mrb, size_val);
   mrb_value frozen_string = mrb_str_new_static(mrb, DATA_PTR(self), size);
 
@@ -338,7 +277,7 @@ mrb_sodium_check_length(mrb_state *mrb, mrb_value data_obj, size_t sodium_const,
 {
   mrb_value size_val;
 
-  if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize"))) {
+  if (likely(mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize")))) {
     size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
   } else {
     size_val = mrb_funcall(mrb, data_obj, "size", 0);
@@ -359,7 +298,7 @@ mrb_sodium_check_length_between(mrb_state *mrb, mrb_value data_obj, size_t min, 
 {
   mrb_value size_val;
 
-  if (mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize"))) {
+  if (likely(mrb_respond_to(mrb, data_obj, mrb_intern_lit(mrb, "bytesize")))) {
     size_val = mrb_funcall(mrb, data_obj, "bytesize", 0);
   } else {
     size_val = mrb_funcall(mrb, data_obj, "size", 0);
@@ -1192,6 +1131,22 @@ mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
   }
 }
 
+static mrb_value
+mrb_secure_buffer_cmp(mrb_state *mrb, mrb_value self)
+{
+  mrb_value input_obj;
+
+  mrb_get_args(mrb, "o", &input_obj);
+
+  void *input = mrb_data_get_ptr(mrb, input_obj, &secure_buffer_type);
+  mrb_int input_len = mrb_fixnum(mrb_iv_get(mrb, input_obj, mrb_intern_lit(mrb, "bytesize")));
+
+  mrb_value secret_obj_len = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "bytesize"));
+  mrb_int secret_len = mrb_int(mrb, secret_obj_len);
+
+  return mrb_bool_value(mrb_secure_memcmp(DATA_PTR(self), secret_len, input, input_len));
+}
+
 void
 mrb_mruby_libsodium_gem_init(mrb_state* mrb)
 {
@@ -1205,7 +1160,6 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,       MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,       MRB_ARGS_ARG(2, 1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,  MRB_ARGS_ARG(1, 1));
-  mrb_define_module_function(mrb, sodium_mod, "memcmp",   mrb_sodium_memcmp,        MRB_ARGS_REQ(2));
 
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
@@ -1213,11 +1167,13 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, secure_buffer_cl, "free",        mrb_secure_buffer_free,       MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "ptr",         mrb_secure_buffer_ptr,        MRB_ARGS_NONE());
   mrb_define_alias (mrb, secure_buffer_cl, "to_ptr", "ptr");
-  mrb_define_method(mrb, secure_buffer_cl, "size",        mrb_secure_buffer_size,       MRB_ARGS_NONE());
+  mrb_define_method(mrb, secure_buffer_cl, "bytesize",    mrb_secure_buffer_bytesize,   MRB_ARGS_NONE());
+  mrb_define_alias (mrb, secure_buffer_cl, "size", "bytesize");
   mrb_define_method(mrb, secure_buffer_cl, "to_str",      mrb_secure_buffer_to_str,     MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "noaccess",    mrb_secure_buffer_noaccess,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readonly",    mrb_secure_buffer_readonly,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readwrite",   mrb_secure_buffer_readwrite,  MRB_ARGS_NONE());
+  mrb_define_method(mrb, secure_buffer_cl, "==",          mrb_secure_buffer_cmp,        MRB_ARGS_NONE());
 
   randombytes_mod = mrb_define_module(mrb, "RandomBytes");
   mrb_define_module_function(mrb, randombytes_mod, "random",  mrb_randombytes_random,   MRB_ARGS_OPT(1));

@@ -12,6 +12,7 @@
 #include <mruby/string.h>
 #include <mruby/variable.h>
 #include <mruby/error.h>
+#include <mruby/secure_compare.h>
 
 static void
 mrb_secure_buffer_destroy(mrb_state *mrb, void *p)

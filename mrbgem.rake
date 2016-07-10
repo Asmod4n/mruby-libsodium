@@ -26,4 +26,5 @@
     end
   end
   spec.add_dependency 'mruby-errno'
+  spec.add_dependency 'mruby-secure-compare'
 end
