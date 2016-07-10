@@ -2,11 +2,12 @@
 
 mruby wrapper for https://github.com/jedisct1/libsodium
 
+    Breaking change in one of the latest commits: removed Sodium.memcmp, added Sodium::SecureBuffer#==
+
 currently supported functions
 ```
 sodium_bin2hex
 sodium_hex2bin
-sodium_memcmp
 ```
 ```
 randombytes_random
