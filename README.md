@@ -3,6 +3,7 @@
 mruby wrapper for https://github.com/jedisct1/libsodium
 
     Breaking change in one of the latest commits: removed Sodium.memcmp, added Sodium::SecureBuffer#==
+    If you need a secure comparising function, take a look at https://github.com/Asmod4n/mruby-secure-compare
 
 currently supported functions
 ```
