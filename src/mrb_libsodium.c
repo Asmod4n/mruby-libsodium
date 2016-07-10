@@ -1173,7 +1173,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, secure_buffer_cl, "noaccess",    mrb_secure_buffer_noaccess,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readonly",    mrb_secure_buffer_readonly,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readwrite",   mrb_secure_buffer_readwrite,  MRB_ARGS_NONE());
-  mrb_define_method(mrb, secure_buffer_cl, "==",          mrb_secure_buffer_cmp,        MRB_ARGS_NONE());
+  mrb_define_method(mrb, secure_buffer_cl, "==",          mrb_secure_buffer_cmp,        MRB_ARGS_REQ(1));
 
   randombytes_mod = mrb_define_module(mrb, "RandomBytes");
   mrb_define_module_function(mrb, randombytes_mod, "random",  mrb_randombytes_random,   MRB_ARGS_OPT(1));
