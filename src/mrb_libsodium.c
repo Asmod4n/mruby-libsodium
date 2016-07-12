@@ -104,6 +104,8 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RANGE_ERROR, "size is out of range");
   }
 
+  int errno_save = errno;
+
   errno = 0;
   void* buffer = sodium_malloc(size);
   if (likely(buffer != NULL)) {
@@ -113,6 +115,8 @@ mrb_secure_buffer_init(mrb_state *mrb, mrb_value self)
   } else {
     mrb_sys_fail(mrb, "sodium_malloc");
   }
+
+  errno = errno_save;
 
   return self;
 }
@@ -244,7 +248,7 @@ mrb_randombytes_buf(mrb_state *mrb, mrb_value self)
       break;
     case MRB_TT_DATA: {
       if (likely(!len_given)) {
-        mrb_value size_val = mrb_funcall(mrb, buf_obj, "size", 0);
+        mrb_value size_val = mrb_funcall(mrb, buf_obj, "bytesize", 0);
         len = mrb_int(mrb, size_val);
       }
 
@@ -333,6 +337,24 @@ mrb_sodium_get_ptr(mrb_state *mrb, mrb_value obj, const char *type)
     default:
       mrb_raisef(mrb, E_TYPE_ERROR, "%S can only be a Data, String or cptr Type", mrb_str_new_static(mrb, type, strlen(type)));
   }
+}
+
+static mrb_value
+mrb_sodium_memzero(mrb_state *mrb, mrb_value self)
+{
+  mrb_value object;
+  mrb_int size;
+
+  mrb_get_args(mrb, "oi", &object, &size);
+
+  if (size < 0||size > SIZE_MAX) {
+    mrb_raise(mrb, E_RANGE_ERROR, "size doesn't fit into size_t");
+  }
+
+  void *ptr = mrb_sodium_get_ptr(mrb, object, "object");
+  sodium_memzero(ptr, size);
+
+  return self;
 }
 
 static mrb_value
@@ -919,6 +941,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
     mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen_val);
   unsigned char * const secret_key = (unsigned char *) DATA_PTR(secret_key_obj);
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash_scryptsalsa208sha256(secret_key, outlen,
     (const char * const) passwd, passwdlen,
@@ -936,6 +960,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256(mrb_state *mrb, mrb_value self)
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256 returned erroneous value %S", mrb_fixnum_value(rc));
   }
+
+  errno = errno_save;
 
   return self;
 }
@@ -959,6 +985,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
 
   mrb_value out = mrb_str_new(mrb, NULL, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1);
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash_scryptsalsa208sha256_str(RSTRING_PTR(out),
     (const char * const) passwd, passwdlen,
@@ -976,6 +1004,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str(mrb_state *mrb, mrb_value self)
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str returned erroneous value %S", mrb_fixnum_value(rc));
   }
 
+  errno = errno_save;
+
   return self;
 }
 
@@ -990,6 +1020,8 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
 
   mrb_sodium_check_length(mrb, str_obj, crypto_pwhash_scryptsalsa208sha256_STRBYTES - 1, "str");
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash_scryptsalsa208sha256_str_verify(RSTRING_PTR(str_obj),
     (const char * const) passwd, passwdlen);
@@ -999,11 +1031,13 @@ mrb_crypto_pwhash_scryptsalsa208sha256_str_verify(mrb_state *mrb, mrb_value self
       if (errno) {
         mrb_sys_fail(mrb, "crypto_pwhash_scryptsalsa208sha256_str_verify");
       }
+      errno = errno_save;
       return mrb_false_value();
     } break;
-    case 0:
-      return mrb_true_value();
-      break;
+    case 0: {
+        errno = errno_save;
+        return mrb_true_value();
+    } break;
     default:
       mrb_raisef(mrb, E_SODIUM_ERROR, "crypto_pwhash_scryptsalsa208sha256_str_verify returned erroneous value %S", mrb_fixnum_value(rc));
   }
@@ -1040,6 +1074,8 @@ mrb_crypto_pwhash(mrb_state *mrb, mrb_value self)
     mrb_class_get_under(mrb, mrb_module_get(mrb, "Sodium"), "SecureBuffer"), 1, &outlen_val);
   unsigned char * const secret_key = (unsigned char *) DATA_PTR(secret_key_obj);
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash(secret_key, outlen,
     (const char * const) passwd, passwdlen,
@@ -1053,6 +1089,7 @@ mrb_crypto_pwhash(mrb_state *mrb, mrb_value self)
       mrb_sys_fail(mrb, "crypto_pwhash");
       break;
     case 0:
+      errno = errno_save;
       return secret_key_obj;
       break;
     default:
@@ -1081,6 +1118,8 @@ mrb_crypto_pwhash_str(mrb_state *mrb, mrb_value self)
 
   mrb_value out = mrb_str_new(mrb, NULL, crypto_pwhash_STRBYTES - 1);
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash_str(RSTRING_PTR(out),
     (const char * const) passwd, passwdlen,
@@ -1092,6 +1131,7 @@ mrb_crypto_pwhash_str(mrb_state *mrb, mrb_value self)
       mrb_sys_fail(mrb, "crypto_pwhash_str");
       break;
     case 0:
+      errno = errno_save;
       return out;
       break;
     default:
@@ -1112,6 +1152,8 @@ mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
 
   mrb_sodium_check_length(mrb, str_obj, crypto_pwhash_STRBYTES - 1, "str");
 
+  int errno_save = errno;
+
   errno = 0;
   int rc = crypto_pwhash_str_verify(RSTRING_PTR(str_obj),
     (const char * const) passwd, passwdlen);
@@ -1121,9 +1163,11 @@ mrb_crypto_pwhash_str_verify(mrb_state *mrb, mrb_value self)
       if (errno) {
         mrb_sys_fail(mrb, "crypto_pwhash_str_verify");
       }
+      errno = errno_save;
       return mrb_false_value();
     } break;
     case 0:
+      errno = errno_save;
       return mrb_true_value();
       break;
     default:
@@ -1160,6 +1204,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,       MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,       MRB_ARGS_ARG(2, 1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,  MRB_ARGS_ARG(1, 1));
+  mrb_define_module_function(mrb, sodium_mod, "memzero",  mrb_sodium_memzero,       MRB_ARGS_REQ(1));
 
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
@@ -1280,10 +1325,14 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_module_function(mrb, crypto_pwhash_scryptsalsa208sha256_mod, "str_verify", mrb_crypto_pwhash_scryptsalsa208sha256_str_verify,
     MRB_ARGS_REQ(2));
 
+  int errno_save = errno;
+
   errno = 0;
   if (unlikely(sodium_init() == -1)) {
     mrb_sys_fail(mrb, "sodium_init");
   }
+
+  errno = errno_save;
 }
 
 void mrb_mruby_libsodium_gem_final(mrb_state* mrb) {}
