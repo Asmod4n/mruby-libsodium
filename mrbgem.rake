@@ -44,6 +44,7 @@
       end
       spec.linker.flags << "#{spec.build_dir}/lib/libsodium.a"
       spec.cc.include_paths << "#{spec.build_dir}/include"
+      build.cc.include_paths << "#{spec.build_dir}/include"
     end
   end
   spec.add_dependency 'mruby-errno'

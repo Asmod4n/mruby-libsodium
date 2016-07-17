@@ -343,15 +343,29 @@ static mrb_value
 mrb_sodium_memzero(mrb_state *mrb, mrb_value self)
 {
   mrb_value object;
-  mrb_int size;
+  mrb_int size = -1;
 
-  mrb_get_args(mrb, "oi", &object, &size);
+  mrb_get_args(mrb, "o|i", &object, &size);
 
-  if (size < 0||size > SIZE_MAX) {
+  if (size < -1||size > SIZE_MAX) {
     mrb_raise(mrb, E_RANGE_ERROR, "size doesn't fit into size_t");
   }
 
   void *ptr = mrb_sodium_get_ptr(mrb, object, "object");
+  if (size == -1) {
+    if (mrb_type(object) == MRB_TT_STRING) {
+      size = RSTRING_CAPA(object);
+    } else {
+      mrb_value size_val;
+
+      if (likely(mrb_respond_to(mrb, object, mrb_intern_lit(mrb, "bytesize")))) {
+        size_val = mrb_funcall(mrb, object, "bytesize", 0);
+      } else {
+        size_val = mrb_funcall(mrb, object, "size", 0);
+      }
+      size = mrb_int(mrb, size_val);
+    }
+  }
   sodium_memzero(ptr, size);
 
   return self;
@@ -1204,7 +1218,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_module_function(mrb, sodium_mod, "bin2hex",  mrb_sodium_bin2hex,       MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin",  mrb_sodium_hex2bin,       MRB_ARGS_ARG(2, 1));
   mrb_define_module_function(mrb, sodium_mod, "hex2bin!", mrb_sodium_hex2bin_dash,  MRB_ARGS_ARG(1, 1));
-  mrb_define_module_function(mrb, sodium_mod, "memzero",  mrb_sodium_memzero,       MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, sodium_mod, "memzero",  mrb_sodium_memzero,       MRB_ARGS_ARG(1, 1));
 
   secure_buffer_cl = mrb_define_class_under(mrb, sodium_mod, "SecureBuffer", mrb->object_class);
   MRB_SET_INSTANCE_TT(secure_buffer_cl, MRB_TT_DATA);
