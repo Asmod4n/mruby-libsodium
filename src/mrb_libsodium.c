@@ -343,18 +343,15 @@ static mrb_value
 mrb_sodium_memzero(mrb_state *mrb, mrb_value self)
 {
   mrb_value object;
-  mrb_int size = -1;
+  mrb_int size = 0;
+  mrb_bool size_given = FALSE;
 
-  mrb_get_args(mrb, "o|i", &object, &size);
-
-  if (size < -1||size > SIZE_MAX) {
-    mrb_raise(mrb, E_RANGE_ERROR, "size doesn't fit into size_t");
-  }
+  mrb_get_args(mrb, "o|i?", &object, &size, &size_given);
 
   void *ptr = mrb_sodium_get_ptr(mrb, object, "object");
-  if (size == -1) {
+  if (!size_given) {
     if (mrb_type(object) == MRB_TT_STRING) {
-      size = RSTRING_CAPA(object);
+      size = RSTRING_CAPA(object) > RSTRING_LEN(object) ? RSTRING_CAPA(object) : RSTRING_LEN(object);
     } else {
       mrb_value size_val;
 
@@ -366,6 +363,11 @@ mrb_sodium_memzero(mrb_state *mrb, mrb_value self)
       size = mrb_int(mrb, size_val);
     }
   }
+
+  if (unlikely(size < 0||size > SIZE_MAX)) {
+    mrb_raise(mrb, E_RANGE_ERROR, "size doesn't fit into size_t");
+  }
+
   sodium_memzero(ptr, size);
 
   return self;
