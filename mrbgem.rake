@@ -6,21 +6,22 @@
     if spec.cc.search_header_path 'sodium.h'
       spec.linker.libraries << 'libsodium'
     else
-      warn "#{spec.name}: cannot find libsodium, building it"
       dir = spec.dir.gsub('/', '\\')
-      spec.cc.defines << 'SODIUM_STATIC'
       unless File.exists?("#{dir}\\libsodium\\bin\\#{ENV['Platform']||'Win32'}\\Release\\v140\\static\\libsodium.lib")
+        warn "#{spec.name}: cannot find libsodium, building it"
+        spec.cc.defines << 'SODIUM_STATIC'
         sh "cd #{dir} && git submodule init && git submodule update && cd libsodium\\builds\\msvc\\build && buildbase.bat ..\\vs2015\\libsodium.sln 14"
       end
       spec.linker.flags << "#{dir}\\libsodium\\bin\\#{ENV['Platform']||'Win32'}\\Release\\v140\\static\\libsodium.lib"
-      spec.cc.include_paths << "#{dir}\\libsodium\\src\\libsodium\\include"
+      spec.cc.include_paths << "#{dir}\\libsodium\\src\\libsodium\\include" unless spec.cc.include_paths.include?("#{dir}\\libsodium\\src\\libsodium\\include")
+      build.cc.include_paths << "#{dir}\\libsodium\\src\\libsodium\\include" unless build.cc.include_paths.include?("#{dir}\\libsodium\\src\\libsodium\\include")
     end
   else
     if spec.cc.search_header_path 'sodium.h'
       spec.linker.libraries << 'sodium'
     else
-      warn "#{spec.name}: cannot find libsodium, building it"
       unless File.exists?("#{spec.build_dir}/lib/libsodium.a")
+        warn "#{spec.name}: cannot find libsodium, building it"
         cc = ENV['CC']
         ld = ENV['LD']
         ar = ENV['AR']
@@ -43,8 +44,8 @@
         ENV['LDFLAGS'] = ldflags
       end
       spec.linker.flags << "#{spec.build_dir}/lib/libsodium.a"
-      spec.cc.include_paths << "#{spec.build_dir}/include"
-      build.cc.include_paths << "#{spec.build_dir}/include"
+      spec.cc.include_paths << "#{spec.build_dir}/include" unless spec.cc.include_paths.include?("#{spec.build_dir}/include")
+      build.cc.include_paths << "#{spec.build_dir}/include" unless build.cc.include_paths.include?("#{spec.build_dir}/include")
     end
   end
   spec.add_dependency 'mruby-errno'
