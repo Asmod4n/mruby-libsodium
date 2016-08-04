@@ -194,6 +194,12 @@ mrb_secure_buffer_readwrite(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_secure_buffer_is_nil(mrb_state *mrb, mrb_value self)
+{
+  return mrb_bool_value(DATA_PTR(self) == NULL);
+}
+
+static mrb_value
 mrb_randombytes_random(mrb_state *mrb, mrb_value self)
 {
   mrb_bool limit = FALSE;
@@ -1249,6 +1255,7 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
   mrb_define_method(mrb, secure_buffer_cl, "readonly",    mrb_secure_buffer_readonly,   MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "readwrite",   mrb_secure_buffer_readwrite,  MRB_ARGS_NONE());
   mrb_define_method(mrb, secure_buffer_cl, "==",          mrb_secure_buffer_cmp,        MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, secure_buffer_cl, "nil?",        mrb_secure_buffer_is_nil,     MRB_ARGS_NONE());
 
   randombytes_mod = mrb_define_module(mrb, "RandomBytes");
   mrb_define_module_function(mrb, randombytes_mod, "random",  mrb_randombytes_random,   MRB_ARGS_OPT(1));
