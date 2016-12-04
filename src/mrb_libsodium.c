@@ -1364,7 +1364,11 @@ mrb_mruby_libsodium_gem_init(mrb_state* mrb)
 
   errno = 0;
   if (unlikely(sodium_init() == -1)) {
-    mrb_sys_fail(mrb, "sodium_init");
+    if (errno == ENOMEM) {
+      mrb_exc_raise(mrb, mrb_obj_value(mrb->nomem_err));
+    } else {
+      mrb_sys_fail(mrb, "sodium_init");
+    }
   }
 }
 
