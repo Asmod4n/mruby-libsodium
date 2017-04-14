@@ -902,7 +902,7 @@ mrb_crypto_generichash_init(mrb_state *mrb, mrb_value self)
       crypto_generichash_KEYBYTES_MIN, crypto_generichash_KEYBYTES_MAX, "key");
   }
 
-  state = (crypto_generichash_state *) mrb_malloc(mrb, sizeof(crypto_generichash_state));
+  state = (crypto_generichash_state *) mrb_realloc(mrb, DATA_PTR(self), sizeof(crypto_generichash_state));
 
   mrb_data_init(self, state, &generic_hash_type);
 
